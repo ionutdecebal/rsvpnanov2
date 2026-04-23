@@ -76,6 +76,7 @@ constexpr int kTypographyGuideHalfWidthMin = 12;
 constexpr int kTypographyGuideHalfWidthMax = 30;
 constexpr int kTypographyGuideGapMin = 2;
 constexpr int kTypographyGuideGapMax = 8;
+constexpr int kOpticalLetterGapPx = 2;
 
 constexpr int kVirtualBufferWidth = (kDisplayWidth + kMinTextScale - 1) / kMinTextScale;
 constexpr int kVirtualBufferHeight = (kDisplayHeight + kMinTextScale - 1) / kMinTextScale;
@@ -294,6 +295,34 @@ int trackedAdvanceScaledPercent(int advance, uint8_t scalePercent, size_t index,
   return std::max(1, scaled + scaledSignedPercent(currentTypographyTrackingPx(), scalePercent));
 }
 
+int opticalKerningAdjustment(char currentChar, char nextChar, int currentXOffset, int currentWidth,
+                             int trackedAdvanceValue, int nextXOffset, int desiredGap) {
+  if (!isWordCharacter(currentChar) || !isWordCharacter(nextChar) || currentWidth <= 0) {
+    return 0;
+  }
+
+  desiredGap = std::max(1, desiredGap);
+  const int visibleGap =
+      trackedAdvanceValue + nextXOffset - (currentXOffset + currentWidth);
+  if (visibleGap <= desiredGap) {
+    return 0;
+  }
+
+  return std::min(visibleGap - desiredGap, std::max(0, trackedAdvanceValue - 1));
+}
+
+int regularDesiredGap() { return std::max(1, kOpticalLetterGapPx + currentTypographyTrackingPx()); }
+
+int scaledDesiredGap(int divisor) {
+  return std::max(1, scaledAdvance(kOpticalLetterGapPx, divisor) +
+                         scaledSignedAdvance(currentTypographyTrackingPx(), divisor));
+}
+
+int scaledPercentDesiredGap(uint8_t scalePercent) {
+  return std::max(1, scaledPercentDimension(kOpticalLetterGapPx, scalePercent) +
+                         scaledSignedPercent(currentTypographyTrackingPx(), scalePercent));
+}
+
 struct TextLayoutMetrics {
   int minX = 0;
   int maxX = 0;
@@ -342,7 +371,14 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
       layout.focusCenterX = width > 0 ? left + (width / 2) : cursorX + (advance / 2);
     }
 
-    cursorX += trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, word.length());
+    int tracked = trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(word[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          word[i], word[i + 1], xOffset, width, tracked,
+          scaledSignedAdvance(static_cast<int>(nextGlyph.xOffset), divisor), scaledDesiredGap(divisor));
+    }
+    cursorX += std::max(1, tracked);
   }
 
   if (!trackFocus && layout.hasPixels) {
@@ -371,8 +407,16 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
       layout.focusCenterX = width > 0 ? left + (width / 2) : cursorX + (advance / 2);
     }
 
-    cursorX += trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i,
-                                           word.length());
+    int tracked =
+        trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(word[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          word[i], word[i + 1], xOffset, width, tracked,
+          scaledSignedPercent(static_cast<int>(nextGlyph.xOffset), scalePercent),
+          scaledPercentDesiredGap(scalePercent));
+    }
+    cursorX += std::max(1, tracked);
   }
 
   if (!trackFocus && layout.hasPixels) {
@@ -398,7 +442,14 @@ TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
       layout.focusCenterX = width > 0 ? left + (width / 2) : cursorX + (advance / 2);
     }
 
-    cursorX += trackedAdvance(advance, i, word.length());
+    int tracked = trackedAdvance(advance, i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerif70Glyph &nextGlyph = glyph70For(word[i + 1]);
+      tracked -= opticalKerningAdjustment(word[i], word[i + 1], static_cast<int>(glyph.xOffset),
+                                          width, tracked, static_cast<int>(nextGlyph.xOffset),
+                                          regularDesiredGap());
+    }
+    cursorX += std::max(1, tracked);
   }
 
   if (!trackFocus && layout.hasPixels) {
@@ -1035,9 +1086,17 @@ void DisplayManager::drawSerifTextAt(const String &text, int x, int y, uint16_t 
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     const EmbeddedSerifGlyph &glyph = glyphFor(text[i]);
-    drawSerifGlyphScaled(cursorX + scaledSignedAdvance(static_cast<int>(glyph.xOffset), divisor), y,
-                         text[i], color, divisor);
-    cursorX += trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, text.length());
+    const int xOffset = scaledSignedAdvance(static_cast<int>(glyph.xOffset), divisor);
+    const int width = glyph.width == 0 ? 0 : scaledAdvance(static_cast<int>(glyph.width), divisor);
+    drawSerifGlyphScaled(cursorX + xOffset, y, text[i], color, divisor);
+    int tracked = trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, text.length());
+    if (i + 1 < text.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(text[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          text[i], text[i + 1], xOffset, width, tracked,
+          scaledSignedAdvance(static_cast<int>(nextGlyph.xOffset), divisor), scaledDesiredGap(divisor));
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1046,7 +1105,14 @@ void DisplayManager::drawSerif70TextAt(const String &text, int x, int y, uint16_
   for (size_t i = 0; i < text.length(); ++i) {
     const EmbeddedSerif70Glyph &glyph = glyph70For(text[i]);
     drawSerif70Glyph(cursorX + static_cast<int>(glyph.xOffset), y, text[i], color);
-    cursorX += trackedAdvance(static_cast<int>(glyph.xAdvance), i, text.length());
+    int tracked = trackedAdvance(static_cast<int>(glyph.xAdvance), i, text.length());
+    if (i + 1 < text.length()) {
+      const EmbeddedSerif70Glyph &nextGlyph = glyph70For(text[i + 1]);
+      tracked -= opticalKerningAdjustment(text[i], text[i + 1], static_cast<int>(glyph.xOffset),
+                                          static_cast<int>(glyph.width), tracked,
+                                          static_cast<int>(nextGlyph.xOffset), regularDesiredGap());
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1055,11 +1121,21 @@ void DisplayManager::drawSerifTextScaledAt(const String &text, int x, int y, uin
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     const EmbeddedSerifGlyph &glyph = glyphFor(text[i]);
-    drawSerifGlyphScaledPercent(
-        cursorX + scaledSignedPercent(static_cast<int>(glyph.xOffset), scalePercent), y, text[i],
-        color, scalePercent);
-    cursorX += trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i,
-                                           text.length());
+    const int xOffset = scaledSignedPercent(static_cast<int>(glyph.xOffset), scalePercent);
+    const int width = glyph.width == 0
+                          ? 0
+                          : scaledPercentDimension(static_cast<int>(glyph.width), scalePercent);
+    drawSerifGlyphScaledPercent(cursorX + xOffset, y, text[i], color, scalePercent);
+    int tracked =
+        trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i, text.length());
+    if (i + 1 < text.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(text[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          text[i], text[i + 1], xOffset, width, tracked,
+          scaledSignedPercent(static_cast<int>(nextGlyph.xOffset), scalePercent),
+          scaledPercentDesiredGap(scalePercent));
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1152,7 +1228,14 @@ void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color
   for (size_t i = 0; i < word.length(); ++i) {
     const EmbeddedSerifGlyph &glyph = glyphFor(word[i]);
     drawGlyph(cursorX + static_cast<int>(glyph.xOffset), y, word[i], color);
-    cursorX += trackedAdvance(static_cast<int>(glyph.xAdvance), i, word.length());
+    int tracked = trackedAdvance(static_cast<int>(glyph.xAdvance), i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(word[i + 1]);
+      tracked -= opticalKerningAdjustment(word[i], word[i + 1], static_cast<int>(glyph.xOffset),
+                                          static_cast<int>(glyph.width), tracked,
+                                          static_cast<int>(nextGlyph.xOffset), regularDesiredGap());
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1163,9 +1246,18 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
   for (size_t i = 0; i < word.length(); ++i) {
     const EmbeddedSerifGlyph &glyph = glyphFor(word[i]);
     const uint16_t color = (static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
-    drawSerifGlyphScaled(cursorX + scaledSignedAdvance(static_cast<int>(glyph.xOffset), divisor), y,
-                         word[i], color, divisor);
-    cursorX += trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, word.length());
+    const int xOffset = scaledSignedAdvance(static_cast<int>(glyph.xOffset), divisor);
+    const int width =
+        glyph.width == 0 ? 0 : scaledAdvance(static_cast<int>(glyph.width), divisor);
+    drawSerifGlyphScaled(cursorX + xOffset, y, word[i], color, divisor);
+    int tracked = trackedAdvanceScaled(static_cast<int>(glyph.xAdvance), divisor, i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(word[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          word[i], word[i + 1], xOffset, width, tracked,
+          scaledSignedAdvance(static_cast<int>(nextGlyph.xOffset), divisor), scaledDesiredGap(divisor));
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1175,7 +1267,14 @@ void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focu
     const EmbeddedSerif70Glyph &glyph = glyph70For(word[i]);
     const uint16_t color = (static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
     drawSerif70Glyph(cursorX + static_cast<int>(glyph.xOffset), y, word[i], color);
-    cursorX += trackedAdvance(static_cast<int>(glyph.xAdvance), i, word.length());
+    int tracked = trackedAdvance(static_cast<int>(glyph.xAdvance), i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerif70Glyph &nextGlyph = glyph70For(word[i + 1]);
+      tracked -= opticalKerningAdjustment(word[i], word[i + 1], static_cast<int>(glyph.xOffset),
+                                          static_cast<int>(glyph.width), tracked,
+                                          static_cast<int>(nextGlyph.xOffset), regularDesiredGap());
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
@@ -1185,11 +1284,21 @@ void DisplayManager::drawRsvpWordScaledPercentAt(const String &word, int x, int 
   for (size_t i = 0; i < word.length(); ++i) {
     const EmbeddedSerifGlyph &glyph = glyphFor(word[i]);
     const uint16_t color = (static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
-    drawSerifGlyphScaledPercent(
-        cursorX + scaledSignedPercent(static_cast<int>(glyph.xOffset), scalePercent), y, word[i],
-        color, scalePercent);
-    cursorX += trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i,
-                                           word.length());
+    const int xOffset = scaledSignedPercent(static_cast<int>(glyph.xOffset), scalePercent);
+    const int width = glyph.width == 0
+                          ? 0
+                          : scaledPercentDimension(static_cast<int>(glyph.width), scalePercent);
+    drawSerifGlyphScaledPercent(cursorX + xOffset, y, word[i], color, scalePercent);
+    int tracked =
+        trackedAdvanceScaledPercent(static_cast<int>(glyph.xAdvance), scalePercent, i, word.length());
+    if (i + 1 < word.length()) {
+      const EmbeddedSerifGlyph &nextGlyph = glyphFor(word[i + 1]);
+      tracked -= opticalKerningAdjustment(
+          word[i], word[i + 1], xOffset, width, tracked,
+          scaledSignedPercent(static_cast<int>(nextGlyph.xOffset), scalePercent),
+          scaledPercentDesiredGap(scalePercent));
+    }
+    cursorX += std::max(1, tracked);
   }
 }
 
