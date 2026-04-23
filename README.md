@@ -72,7 +72,7 @@ web/firmware/rsvp-nano.bin
 
 ## Hardware
 
-The current firmware configuration targets:
+The current firmware configuration targets the [Waveshare ESP32-S3-Touch-LCD-3.49](https://www.waveshare.com/esp32-s3-touch-lcd-3.49.htm?sku=32375):
 
 - ESP32-S3 with 16 MB flash and OPI PSRAM.
 - AXS15231B-based 172 x 640 LCD panel used in landscape as 640 x 172.
@@ -90,6 +90,7 @@ If you prefer to pre-convert books on a computer, copy the helper files from `to
 - Linux: `convert_books_linux.sh` or `python3 convert_books.py`
 
 The desktop converter scans `/books` and creates `.rsvp` files beside supported sources.
+The Linux path has been used during development. The macOS and Windows launchers are included, but they have not been tested yet.
 
 Supported input formats:
 

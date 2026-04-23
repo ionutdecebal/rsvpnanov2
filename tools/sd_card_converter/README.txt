@@ -17,6 +17,9 @@ Then run the launcher for your computer:
 The converter scans the SD card's books folder and creates .rsvp files beside supported source
 books. It skips .rsvp files that already exist unless you run:
 
+The Linux path has been used during development. The macOS and Windows launchers are included,
+but they have not been tested yet.
+
 python3 convert_books.py --force
 
 By default the converter no longer applies a word cap. If you ever want a smaller file on purpose,
