@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_FIRMWARE_DIR = ROOT / "web" / "firmware"
+BOOT_APP0_GLOB = "framework-arduinoespressif32*/tools/partitions/boot_app0.bin"
 
 EXPORTS = {
     "waveshare_esp32s3": {
@@ -56,20 +57,29 @@ def git_version() -> str:
         return "dev"
 
 
+def find_boot_app0() -> Path:
+    search_roots = [
+        ROOT / ".pio" / "packages",
+        Path.home() / ".platformio" / "packages",
+    ]
+    candidates: list[Path] = []
+    for root in search_roots:
+        candidates.extend(root.glob(BOOT_APP0_GLOB))
+
+    if not candidates:
+        raise SystemExit("Could not find Arduino ESP32 boot_app0.bin after PlatformIO build.")
+
+    return sorted(candidates)[-1]
+
+
 def load_flash_parts(env: str) -> list[tuple[int, Path]]:
-    idedata_path = ROOT / ".pio" / "build" / env / "idedata.json"
-    if not idedata_path.exists():
-        raise SystemExit(f"Missing {idedata_path}. Run the PlatformIO build first.")
-
-    data = json.loads(idedata_path.read_text())
-    extra = data.get("extra", {})
-    parts: list[tuple[int, Path]] = []
-
-    for image in extra.get("flash_images", []):
-        parts.append((int(image["offset"], 16), Path(image["path"])))
-
-    app_offset = int(extra.get("application_offset", "0x10000"), 16)
-    parts.append((app_offset, ROOT / ".pio" / "build" / env / "firmware.bin"))
+    build_dir = ROOT / ".pio" / "build" / env
+    parts: list[tuple[int, Path]] = [
+        (0x0000, build_dir / "bootloader.bin"),
+        (0x8000, build_dir / "partitions.bin"),
+        (0xE000, find_boot_app0()),
+        (0x10000, build_dir / "firmware.bin"),
+    ]
 
     for _, path in parts:
         if not path.exists():
