@@ -72,7 +72,7 @@ web/firmware/rsvp-nano.bin
 
 ## Hardware
 
-The current firmware configuration targets the [Waveshare ESP32-S3-Touch-LCD-3.49](https://www.waveshare.com/esp32-s3-touch-lcd-3.49.htm?sku=32375):
+The current firmware configuration targets the [Waveshare ESP32-S3-Touch-LCD-3.49](https://www.waveshare.com/esp32-s3-touch-lcd-3.49.htm?&aff_id=153227):
 
 - ESP32-S3 with 16 MB flash and OPI PSRAM.
 - AXS15231B-based 172 x 640 LCD panel used in landscape as 640 x 172.
