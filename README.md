@@ -106,14 +106,23 @@ A second build target — the [Waveshare ESP32-C6-Touch-LCD-1.47](https://www.wa
 
 ### Optional: battery + thermistor on the C6
 
-The C6 board exposes Vbat to GPIO0 through a built-in 1:2 (÷3) divider, so battery monitoring works with no extra parts. For pack temperature, the firmware can read an external NTC thermistor (e.g. the Yellow lead of an LP803448 LiPo) on GPIO6:
+The C6 board exposes Vbat to GPIO0 through a built-in 1:2 (÷3) divider, so battery monitoring works with no extra parts. For pack temperature, the firmware can read an external NTC thermistor (e.g. the Yellow lead of an LP803448 LiPo). It is **off by default** on every target — opt in by adding a build flag:
+
+```ini
+[env:waveshare_esp32c6]
+build_flags =
+  ${env.build_flags}
+  -DRSVP_THERMISTOR_PIN=6   ; ADC1 channel; on the C6 GPIO5 or GPIO6 are free
+```
+
+Recommended wiring (NTC-to-GND, with a 10 kΩ pull-up to 3V3):
 
 ```text
-3V3 ──[ 10 kΩ ]──┬── GPIO6 (ADC1_CH6)
+3V3 ──[ 10 kΩ ]──┬── GPIO<RSVP_THERMISTOR_PIN>
                  └── NTC (Yellow) ── BAT-/GND
 ```
 
-Defaults assume an NTC with R0 = 10 kΩ at 25 °C and β = 3950 (typical for LP-series LiPos). Override `THERMISTOR_BETA`, `THERMISTOR_NOMINAL_OHMS`, or `THERMISTOR_NTC_TO_GND` in [src/board/BoardConfig.h](src/board/BoardConfig.h) if your pack differs. With no thermistor connected the firmware reports voltage only.
+Defaults assume an NTC with R0 = 10 kΩ at 25 °C and β = 3950 (typical for LP-series LiPos). Override per-env via `-DRSVP_THERMISTOR_BETA=...`, `-DRSVP_THERMISTOR_R0_OHMS=...`, `-DRSVP_THERMISTOR_SERIES_OHMS=...`, or `-DRSVP_THERMISTOR_NTC_TO_GND=0` for the inverted topology. With the flag unset (or `RSVP_THERMISTOR_PIN=-1`) the firmware reports voltage only. The same build flags work on the S3 target if you wire an NTC to a free ADC pin there.
 
 If you are adapting the project to different hardware, start with [src/board/BoardConfig.h](src/board/BoardConfig.h), then review the display, touch, power, and SD wiring code.
 

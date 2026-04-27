@@ -5,6 +5,34 @@
 
 namespace BoardConfig {
 
+// Optional NTC thermistor for battery-pack temperature. Disabled by default on
+// every target; opt in by adding `-DRSVP_THERMISTOR_PIN=<gpio>` (and optionally
+// `-DRSVP_THERMISTOR_BETA=...`, `-DRSVP_THERMISTOR_R0_OHMS=...`,
+// `-DRSVP_THERMISTOR_SERIES_OHMS=...`, `-DRSVP_THERMISTOR_NTC_TO_GND=0|1`) to
+// the env's build_flags. The pin must be a free ADC1 channel.
+#ifdef RSVP_THERMISTOR_PIN
+constexpr int PIN_THERMISTOR_ADC = RSVP_THERMISTOR_PIN;
+#else
+constexpr int PIN_THERMISTOR_ADC = -1;
+#endif
+#ifndef RSVP_THERMISTOR_SERIES_OHMS
+#define RSVP_THERMISTOR_SERIES_OHMS 10000.0f
+#endif
+#ifndef RSVP_THERMISTOR_R0_OHMS
+#define RSVP_THERMISTOR_R0_OHMS 10000.0f
+#endif
+#ifndef RSVP_THERMISTOR_BETA
+#define RSVP_THERMISTOR_BETA 3950.0f
+#endif
+#ifndef RSVP_THERMISTOR_NTC_TO_GND
+#define RSVP_THERMISTOR_NTC_TO_GND 1
+#endif
+constexpr float THERMISTOR_SERIES_OHMS = RSVP_THERMISTOR_SERIES_OHMS;
+constexpr float THERMISTOR_NOMINAL_OHMS = RSVP_THERMISTOR_R0_OHMS;
+constexpr float THERMISTOR_NOMINAL_C = 25.0f;
+constexpr float THERMISTOR_BETA = RSVP_THERMISTOR_BETA;
+constexpr bool THERMISTOR_NTC_TO_GND = (RSVP_THERMISTOR_NTC_TO_GND) != 0;
+
 #if CONFIG_IDF_TARGET_ESP32C6
 
 // Waveshare ESP32-C6-Touch-LCD-1.47 (JD9853 SPI panel + AXS5106L touch).
@@ -17,18 +45,11 @@ constexpr int PIN_PWR_BUTTON = -1;   // No dedicated power button on this board.
 constexpr int PIN_BATTERY_ADC = 0;
 constexpr float BATTERY_DIVIDER_RATIO = 3.0f;
 
-// External NTC thermistor for the LP803448 LiPo's Yellow lead.
-// Wiring: 3V3 ── 10k pull-up ──┬── GPIO6 (ADC1_CH6)
-//                              └── Yellow (NTC, other leg internal-to-B-)
+// Optional external NTC: enable with `-DRSVP_THERMISTOR_PIN=6` for the
+// LP803448 LiPo's Yellow lead. Wiring:
+//   3V3 ── 10k pull-up ──┬── GPIO6 (ADC1_CH6)
+//                        └── Yellow (NTC) ── BAT-/GND
 // Black goes to the board's BAT- pad.
-constexpr int PIN_THERMISTOR_ADC = 6;
-constexpr float THERMISTOR_SERIES_OHMS = 10000.0f;  // 10k pull-up to 3V3
-constexpr float THERMISTOR_NOMINAL_OHMS = 10000.0f; // R0 at 25 C
-constexpr float THERMISTOR_NOMINAL_C = 25.0f;       // T0
-constexpr float THERMISTOR_BETA = 3950.0f;          // typical for LP-series LiPo NTCs
-// true  => NTC tied to GND, pull-up to 3V3 (LP803448 Yellow wire layout, recommended)
-// false => NTC tied to 3V3, pull-down to GND
-constexpr bool THERMISTOR_NTC_TO_GND = true;
 
 constexpr int PIN_LCD_CS = 14;
 constexpr int PIN_LCD_DC = 15;
@@ -77,15 +98,6 @@ constexpr uint8_t TCA9554_PIN_SYS_EN = 0;
 constexpr int PIN_BOOT_BUTTON = 0;
 constexpr int PIN_PWR_BUTTON = 16;
 constexpr int PIN_BATTERY_ADC = 4;
-
-// No external NTC on the S3 board. Stubs let the shared thermistor code
-// compile and short-circuit at runtime via the PIN_THERMISTOR_ADC < 0 guard.
-constexpr int PIN_THERMISTOR_ADC = -1;
-constexpr float THERMISTOR_SERIES_OHMS = 10000.0f;
-constexpr float THERMISTOR_NOMINAL_OHMS = 10000.0f;
-constexpr float THERMISTOR_NOMINAL_C = 25.0f;
-constexpr float THERMISTOR_BETA = 3950.0f;
-constexpr bool THERMISTOR_NTC_TO_GND = true;
 
 constexpr int PIN_LCD_CS = 9;
 constexpr int PIN_LCD_SCLK = 10;
