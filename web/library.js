@@ -111,7 +111,7 @@ const ASCII_REPLACEMENTS = {
 const SPACE_LIKE_RE =
   /[\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\r\n\t]/g;
 const COMBINING_MARKS_RE = /[\u0300-\u036f]/g;
-const DEFAULT_OUTPUT_MODE = "ascii";
+const DEFAULT_OUTPUT_MODE = "unicode";
 
 const state = {
   items: [],

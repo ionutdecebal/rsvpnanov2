@@ -34,7 +34,8 @@ The browser workflow currently accepts:
 - `.md` / `.markdown`
 - `.html` / `.htm` / `.xhtml`
 
-The browser page automatically writes the most compatible `.rsvp` output for the current firmware.
+The browser page automatically writes `.rsvp` output that preserves common accented, Baltic,
+Sami, and other extended-Latin letters while staying compatible with the current firmware.
 
 ### Add Books
 
@@ -50,6 +51,12 @@ If you want to manage files manually, create a `books` folder at the root of the
 ```
 
 The device library scans `/books` for `.rsvp`, `.txt`, and `.epub` files.
+
+Current text support is best for ASCII plus a curated set of accented and extended-Latin letters
+used in many European languages. That includes the usual Germanic and Nordic letters plus common
+extras such as `OE`/`oe` ligatures, Polish `L`-slash style letters, Romanian comma-accent letters,
+several Central European and Turkish forms, and the Baltic/Sami letters used in Latvian,
+Lithuanian, and Sami text. More complex scripts still need additional renderer and font work.
 
 The firmware prioritizes `.rsvp` files. If a matching `.rsvp` file does not exist yet, an EPUB
 appears in the library and is converted locally the first time it is opened. The converted `.rsvp`

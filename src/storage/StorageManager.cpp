@@ -11,6 +11,7 @@
 
 #include "board/BoardConfig.h"
 #include "storage/EpubConverter.h"
+#include "text/LatinText.h"
 
 #ifndef RSVP_ON_DEVICE_EPUB_CONVERSION
 #define RSVP_ON_DEVICE_EPUB_CONVERSION 0
@@ -38,7 +39,7 @@ bool reachedBookWordLimit(size_t wordCount) {
   return hasBookWordLimit() && wordCount >= kMaxBookWords;
 }
 
-bool isWordBoundary(char c) { return c <= ' '; }
+bool isWordBoundary(char c) { return LatinText::byteValue(c) <= ' '; }
 
 bool prefixHasBoundary(const String &lowered, const char *prefix) {
   const size_t prefixLength = std::strlen(prefix);
@@ -336,14 +337,14 @@ bool decodeUtf8Codepoint(const String &text, size_t &index, uint32_t &codepoint)
   return true;
 }
 
-void appendAsciiText(String &target, const char *text) {
+void appendText(String &target, const char *text) {
   while (*text != '\0') {
     target += *text;
     ++text;
   }
 }
 
-void appendAsciiApproximation(String &target, uint32_t codepoint) {
+void appendDisplayApproximation(String &target, uint32_t codepoint) {
   if (codepoint >= 32 && codepoint <= 126) {
     target += static_cast<char>(codepoint);
     return;
@@ -357,50 +358,107 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     return;
   }
 
-  if ((codepoint >= 0x00C0 && codepoint <= 0x00C5) || codepoint == 0x0100 ||
-      codepoint == 0x0102 || codepoint == 0x0104) {
-    target += 'A';
+  if (codepoint == 0x00AD) {
     return;
   }
-  if ((codepoint >= 0x00E0 && codepoint <= 0x00E5) || codepoint == 0x0101 ||
-      codepoint == 0x0103 || codepoint == 0x0105) {
-    target += 'a';
-    return;
-  }
-  if (codepoint >= 0x00C8 && codepoint <= 0x00CB) {
-    target += 'E';
-    return;
-  }
-  if (codepoint >= 0x00E8 && codepoint <= 0x00EB) {
-    target += 'e';
-    return;
-  }
-  if (codepoint >= 0x00CC && codepoint <= 0x00CF) {
-    target += 'I';
-    return;
-  }
-  if (codepoint >= 0x00EC && codepoint <= 0x00EF) {
-    target += 'i';
-    return;
-  }
-  if ((codepoint >= 0x00D2 && codepoint <= 0x00D6) || codepoint == 0x00D8) {
-    target += 'O';
-    return;
-  }
-  if ((codepoint >= 0x00F2 && codepoint <= 0x00F6) || codepoint == 0x00F8) {
-    target += 'o';
-    return;
-  }
-  if (codepoint >= 0x00D9 && codepoint <= 0x00DC) {
-    target += 'U';
-    return;
-  }
-  if (codepoint >= 0x00F9 && codepoint <= 0x00FC) {
-    target += 'u';
+
+  uint8_t storedByte = 0;
+  if (LatinText::storageByteForCodepoint(codepoint, storedByte)) {
+    target += static_cast<char>(storedByte);
     return;
   }
 
   switch (codepoint) {
+    case 0x00A1:
+      target += '!';
+      return;
+    case 0x00A2:
+      target += 'c';
+      return;
+    case 0x00A3:
+      appendText(target, "GBP");
+      return;
+    case 0x00A4:
+      target += '$';
+      return;
+    case 0x00A5:
+      target += 'Y';
+      return;
+    case 0x00A6:
+      target += '|';
+      return;
+    case 0x00A7:
+      target += 'S';
+      return;
+    case 0x00A8:
+      target += '"';
+      return;
+    case 0x00A9:
+      appendText(target, "(c)");
+      return;
+    case 0x00AA:
+      target += 'a';
+      return;
+    case 0x00AB:
+      target += '"';
+      return;
+    case 0x00AC:
+      target += '!';
+      return;
+    case 0x00AE:
+      appendText(target, "(r)");
+      return;
+    case 0x00AF:
+      target += '-';
+      return;
+    case 0x00B0:
+      appendText(target, "deg");
+      return;
+    case 0x00B1:
+      appendText(target, "+/-");
+      return;
+    case 0x00B2:
+      target += '2';
+      return;
+    case 0x00B3:
+      target += '3';
+      return;
+    case 0x00B4:
+      target += '\'';
+      return;
+    case 0x00B5:
+      target += 'u';
+      return;
+    case 0x00B6:
+      target += 'P';
+      return;
+    case 0x00B7:
+      target += '*';
+      return;
+    case 0x00B8:
+      target += ',';
+      return;
+    case 0x00B9:
+      target += '1';
+      return;
+    case 0x00BA:
+      target += 'o';
+      return;
+    case 0x00BB:
+      target += '"';
+      return;
+    case 0x00BC:
+      appendText(target, "1/4");
+      return;
+    case 0x00BD:
+      appendText(target, "1/2");
+      return;
+    case 0x00BE:
+      appendText(target, "3/4");
+      return;
+    case 0x00BF:
+      target += '?';
+      return;
     case 0x2018:
     case 0x2019:
     case 0x201A:
@@ -413,8 +471,6 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     case 0x201D:
     case 0x201E:
     case 0x201F:
-    case 0x00AB:
-    case 0x00BB:
     case 0x2033:
     case 0x2036:
       target += '"';
@@ -430,52 +486,47 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
       target += '-';
       return;
     case 0x2026:
-      appendAsciiText(target, "...");
+      appendText(target, "...");
       return;
     case 0x2022:
-    case 0x00B7:
     case 0x2219:
       target += '*';
       return;
-    case 0x00A9:
-      appendAsciiText(target, "(c)");
-      return;
-    case 0x00AE:
-      appendAsciiText(target, "(r)");
-      return;
     case 0x2122:
-      appendAsciiText(target, "TM");
+      appendText(target, "TM");
       return;
-    case 0x00C6:
-    case 0x01E2:
-    case 0x01FC:
-      appendAsciiText(target, "AE");
+    case 0x00D7:
+      target += 'x';
       return;
-    case 0x00E6:
-    case 0x01E3:
-    case 0x01FD:
-      appendAsciiText(target, "ae");
+    case 0x00F7:
+      target += '/';
       return;
-    case 0x00C7:
+    case 0x0100:
+    case 0x0102:
+    case 0x0104:
+      target += 'A';
+      return;
+    case 0x0101:
+    case 0x0103:
+    case 0x0105:
+      target += 'a';
+      return;
     case 0x0106:
     case 0x0108:
     case 0x010A:
     case 0x010C:
       target += 'C';
       return;
-    case 0x00E7:
     case 0x0107:
     case 0x0109:
     case 0x010B:
     case 0x010D:
       target += 'c';
       return;
-    case 0x00D0:
     case 0x010E:
     case 0x0110:
       target += 'D';
       return;
-    case 0x00F0:
     case 0x010F:
     case 0x0111:
       target += 'd';
@@ -540,19 +591,25 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     case 0x0137:
       target += 'k';
       return;
+    case 0x0139:
+    case 0x013B:
+    case 0x013D:
+    case 0x013F:
     case 0x0141:
       target += 'L';
       return;
+    case 0x013A:
+    case 0x013C:
+    case 0x013E:
+    case 0x0140:
     case 0x0142:
       target += 'l';
       return;
-    case 0x00D1:
     case 0x0143:
     case 0x0145:
     case 0x0147:
       target += 'N';
       return;
-    case 0x00F1:
     case 0x0144:
     case 0x0146:
     case 0x0148:
@@ -569,10 +626,10 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
       target += 'o';
       return;
     case 0x0152:
-      appendAsciiText(target, "OE");
+      appendText(target, "OE");
       return;
     case 0x0153:
-      appendAsciiText(target, "oe");
+      appendText(target, "oe");
       return;
     case 0x0154:
     case 0x0156:
@@ -595,9 +652,6 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     case 0x015F:
     case 0x0161:
       target += 's';
-      return;
-    case 0x00DF:
-      appendAsciiText(target, "ss");
       return;
     case 0x0162:
     case 0x0164:
@@ -631,13 +685,10 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     case 0x0175:
       target += 'w';
       return;
-    case 0x00DD:
     case 0x0176:
     case 0x0178:
       target += 'Y';
       return;
-    case 0x00FD:
-    case 0x00FF:
     case 0x0177:
       target += 'y';
       return;
@@ -651,30 +702,32 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
     case 0x017E:
       target += 'z';
       return;
-    case 0x00DE:
-      appendAsciiText(target, "Th");
+    case 0x01E2:
+    case 0x01FC:
+      appendText(target, "AE");
       return;
-    case 0x00FE:
-      appendAsciiText(target, "th");
+    case 0x01E3:
+    case 0x01FD:
+      appendText(target, "ae");
       return;
     case 0xFB00:
-      appendAsciiText(target, "ff");
+      appendText(target, "ff");
       return;
     case 0xFB01:
-      appendAsciiText(target, "fi");
+      appendText(target, "fi");
       return;
     case 0xFB02:
-      appendAsciiText(target, "fl");
+      appendText(target, "fl");
       return;
     case 0xFB03:
-      appendAsciiText(target, "ffi");
+      appendText(target, "ffi");
       return;
     case 0xFB04:
-      appendAsciiText(target, "ffl");
+      appendText(target, "ffl");
       return;
     case 0xFB05:
     case 0xFB06:
-      appendAsciiText(target, "st");
+      appendText(target, "st");
       return;
     default:
       return;
@@ -683,6 +736,71 @@ void appendAsciiApproximation(String &target, uint32_t codepoint) {
 
 void appendSingleByteApproximation(String &target, uint8_t value) {
   switch (value) {
+    case 0xA0:
+      target += ' ';
+      return;
+    case 0xA1:
+      target += '!';
+      return;
+    case 0xA2:
+      target += 'c';
+      return;
+    case 0xA3:
+      appendText(target, "GBP");
+      return;
+    case 0xA4:
+      target += '$';
+      return;
+    case 0xA5:
+      target += 'Y';
+      return;
+    case 0xA6:
+      target += '|';
+      return;
+    case 0xA7:
+      target += 'S';
+      return;
+    case 0xA8:
+      target += '"';
+      return;
+    case 0xA9:
+      appendText(target, "(c)");
+      return;
+    case 0xAA:
+      target += 'a';
+      return;
+    case 0xAB:
+      target += '"';
+      return;
+    case 0xAD:
+      return;
+    case 0xAC:
+      target += '!';
+      return;
+    case 0xAE:
+      appendText(target, "(r)");
+      return;
+    case 0xAF:
+      target += '-';
+      return;
+    case 0xB0:
+      appendText(target, "deg");
+      return;
+    case 0xB1:
+      appendText(target, "+/-");
+      return;
+    case 0x80:
+      appendText(target, "EUR");
+      return;
+    case 0x8A:
+      target += static_cast<char>(0x86);
+      return;
+    case 0x8C:
+      target += static_cast<char>(0x80);
+      return;
+    case 0x8E:
+      target += static_cast<char>(0x88);
+      return;
     case 0x82:
     case 0x91:
     case 0x92:
@@ -693,22 +811,82 @@ void appendSingleByteApproximation(String &target, uint8_t value) {
     case 0x94:
       target += '"';
       return;
-    case 0x96:
-    case 0x97:
-      target += '-';
-      return;
     case 0x85:
-      appendAsciiText(target, "...");
+      appendText(target, "...");
       return;
     case 0x95:
       target += '*';
       return;
+    case 0x96:
+    case 0x97:
+      target += '-';
+      return;
     case 0x99:
-      appendAsciiText(target, "TM");
+      appendText(target, "TM");
+      return;
+    case 0x9A:
+      target += static_cast<char>(0x87);
+      return;
+    case 0x9C:
+      target += static_cast<char>(0x81);
+      return;
+    case 0x9E:
+      target += static_cast<char>(0x89);
+      return;
+    case 0x9F:
+      target += 'Y';
+      return;
+    case 0xB2:
+      target += '2';
+      return;
+    case 0xB3:
+      target += '3';
+      return;
+    case 0xB4:
+      target += '\'';
+      return;
+    case 0xB5:
+      target += 'u';
+      return;
+    case 0xB6:
+      target += 'P';
+      return;
+    case 0xB7:
+      target += '*';
+      return;
+    case 0xB8:
+      target += ',';
+      return;
+    case 0xB9:
+      target += '1';
+      return;
+    case 0xBA:
+      target += 'o';
+      return;
+    case 0xBB:
+      target += '"';
+      return;
+    case 0xBC:
+      appendText(target, "1/4");
+      return;
+    case 0xBD:
+      appendText(target, "1/2");
+      return;
+    case 0xBE:
+      appendText(target, "3/4");
+      return;
+    case 0xBF:
+      target += '?';
+      return;
+    case 0xD7:
+      target += 'x';
+      return;
+    case 0xF7:
+      target += '/';
       return;
     default:
       if (value >= 0xA0) {
-        appendAsciiApproximation(target, value);
+        target += static_cast<char>(value);
       }
       return;
   }
@@ -723,7 +901,7 @@ String normalizeDisplayText(const String &text) {
     const size_t before = index;
     uint32_t codepoint = 0;
     if (decodeUtf8Codepoint(text, index, codepoint)) {
-      appendAsciiApproximation(normalized, codepoint);
+      appendDisplayApproximation(normalized, codepoint);
       continue;
     }
 
@@ -735,8 +913,8 @@ String normalizeDisplayText(const String &text) {
   collapsed.reserve(normalized.length());
   bool previousSpace = true;
   for (size_t i = 0; i < normalized.length(); ++i) {
-    const char c = normalized[i];
-    if (c <= ' ') {
+    const uint8_t value = LatinText::byteValue(normalized[i]);
+    if (value <= ' ') {
       if (!previousSpace) {
         collapsed += ' ';
         previousSpace = true;
@@ -744,7 +922,7 @@ String normalizeDisplayText(const String &text) {
       continue;
     }
 
-    collapsed += c;
+    collapsed += static_cast<char>(value);
     previousSpace = false;
   }
 
@@ -775,7 +953,7 @@ void pushCleanWord(String token, std::vector<String> &words) {
 
   bool hasAlphaNumeric = false;
   for (size_t i = 0; i < token.length(); ++i) {
-    if (std::isalnum(static_cast<unsigned char>(token[i])) != 0) {
+    if (LatinText::isWordCharacter(LatinText::byteValue(token[i]))) {
       hasAlphaNumeric = true;
       break;
     }

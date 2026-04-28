@@ -4,6 +4,8 @@
 #include <cctype>
 #include <utility>
 
+#include "text/LatinText.h"
+
 namespace {
 
 constexpr const char *kDemoWords[] = {
@@ -45,37 +47,27 @@ constexpr uint8_t kMaxCatchUpWords = 4;
 constexpr uint16_t kMaxPacingDelayMs = 600;
 
 bool isWordCharacter(char c) {
-  return std::isalnum(static_cast<unsigned char>(c)) != 0;
+  return LatinText::isWordCharacter(static_cast<uint8_t>(c));
 }
 
 bool isLetterCharacter(char c) {
-  return std::isalpha(static_cast<unsigned char>(c)) != 0;
+  return LatinText::isLetter(static_cast<uint8_t>(c));
 }
 
 bool isDigitCharacter(char c) {
-  return std::isdigit(static_cast<unsigned char>(c)) != 0;
+  return LatinText::isDigit(static_cast<uint8_t>(c));
 }
 
 bool isLowercaseLetter(char c) {
-  return std::islower(static_cast<unsigned char>(c)) != 0;
+  return LatinText::isLowercaseLetter(static_cast<uint8_t>(c));
 }
 
 bool isUppercaseLetter(char c) {
-  return std::isupper(static_cast<unsigned char>(c)) != 0;
+  return LatinText::isUppercaseLetter(static_cast<uint8_t>(c));
 }
 
 bool isVowelCharacter(char c) {
-  switch (static_cast<char>(std::tolower(static_cast<unsigned char>(c)))) {
-    case 'a':
-    case 'e':
-    case 'i':
-    case 'o':
-    case 'u':
-    case 'y':
-      return true;
-    default:
-      return false;
-  }
+  return LatinText::isVowel(static_cast<uint8_t>(c));
 }
 
 bool isSegmentSeparator(char c) {
@@ -171,10 +163,10 @@ int approximateSyllableGroupCount(const String &word) {
     }
 
     ++letterCount;
-    const char lowered = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const char lowered = static_cast<char>(LatinText::toLowercaseByte(static_cast<uint8_t>(c)));
     lettersOnly += lowered;
 
-    const bool vowel = isVowelCharacter(lowered);
+    const bool vowel = LatinText::isVowel(static_cast<uint8_t>(lowered));
     if (vowel && !previousWasVowel) {
       ++groups;
     }

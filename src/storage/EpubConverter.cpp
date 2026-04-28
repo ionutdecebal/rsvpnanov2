@@ -9,6 +9,8 @@
 #include <esp_heap_caps.h>
 #include <vector>
 
+#include "text/LatinText.h"
+
 namespace {
 
 constexpr uint32_t kZipEocdSignature = 0x06054B50UL;
@@ -327,6 +329,14 @@ String attributeValue(const String &tag, const char *name) {
   return "";
 }
 
+char entityCodepointByte(uint32_t codepoint) {
+  uint8_t storedByte = 0;
+  if (LatinText::storageByteForCodepoint(codepoint, storedByte)) {
+    return static_cast<char>(storedByte);
+  }
+  return ' ';
+}
+
 char decodedEntityChar(const String &entity) {
   if (entity == "amp") {
     return '&';
@@ -352,6 +362,171 @@ char decodedEntityChar(const String &entity) {
   if (entity == "hellip") {
     return '.';
   }
+  if (entity == "AElig") {
+    return static_cast<char>(0xC6);
+  }
+  if (entity == "aelig") {
+    return static_cast<char>(0xE6);
+  }
+  if (entity == "Aring") {
+    return static_cast<char>(0xC5);
+  }
+  if (entity == "aring") {
+    return static_cast<char>(0xE5);
+  }
+  if (entity == "Auml") {
+    return static_cast<char>(0xC4);
+  }
+  if (entity == "auml") {
+    return static_cast<char>(0xE4);
+  }
+  if (entity == "Ccedil") {
+    return static_cast<char>(0xC7);
+  }
+  if (entity == "ccedil") {
+    return static_cast<char>(0xE7);
+  }
+  if (entity == "ETH") {
+    return static_cast<char>(0xD0);
+  }
+  if (entity == "eth") {
+    return static_cast<char>(0xF0);
+  }
+  if (entity == "Ntilde") {
+    return static_cast<char>(0xD1);
+  }
+  if (entity == "ntilde") {
+    return static_cast<char>(0xF1);
+  }
+  if (entity == "Oslash") {
+    return static_cast<char>(0xD8);
+  }
+  if (entity == "oslash") {
+    return static_cast<char>(0xF8);
+  }
+  if (entity == "Ouml") {
+    return static_cast<char>(0xD6);
+  }
+  if (entity == "ouml") {
+    return static_cast<char>(0xF6);
+  }
+  if (entity == "THORN") {
+    return static_cast<char>(0xDE);
+  }
+  if (entity == "thorn") {
+    return static_cast<char>(0xFE);
+  }
+  if (entity == "Uuml") {
+    return static_cast<char>(0xDC);
+  }
+  if (entity == "uuml") {
+    return static_cast<char>(0xFC);
+  }
+  if (entity == "szlig") {
+    return static_cast<char>(0xDF);
+  }
+  if (entity == "OElig") {
+    return static_cast<char>(0x80);
+  }
+  if (entity == "oelig") {
+    return static_cast<char>(0x81);
+  }
+  if (entity == "Scaron") {
+    return static_cast<char>(0x86);
+  }
+  if (entity == "scaron") {
+    return static_cast<char>(0x87);
+  }
+  if (entity == "Zcaron") {
+    return static_cast<char>(0x88);
+  }
+  if (entity == "zcaron") {
+    return static_cast<char>(0x89);
+  }
+  if (entity == "Amacr") {
+    return static_cast<char>(0xA1);
+  }
+  if (entity == "amacr") {
+    return static_cast<char>(0xA2);
+  }
+  if (entity == "Emacr") {
+    return static_cast<char>(0xA3);
+  }
+  if (entity == "emacr") {
+    return static_cast<char>(0xA4);
+  }
+  if (entity == "Gcedil" || entity == "Gcommaaccent") {
+    return static_cast<char>(0xA5);
+  }
+  if (entity == "gcedil" || entity == "gcommaaccent") {
+    return static_cast<char>(0xA6);
+  }
+  if (entity == "Imacr") {
+    return static_cast<char>(0xA7);
+  }
+  if (entity == "imacr") {
+    return static_cast<char>(0xA8);
+  }
+  if (entity == "Kcedil" || entity == "Kcommaaccent") {
+    return static_cast<char>(0xA9);
+  }
+  if (entity == "kcedil" || entity == "kcommaaccent") {
+    return static_cast<char>(0xAA);
+  }
+  if (entity == "Lcedil" || entity == "Lcommaaccent") {
+    return static_cast<char>(0xAB);
+  }
+  if (entity == "lcedil" || entity == "lcommaaccent") {
+    return static_cast<char>(0xAC);
+  }
+  if (entity == "Ncedil" || entity == "Ncommaaccent") {
+    return static_cast<char>(0xAE);
+  }
+  if (entity == "ncedil" || entity == "ncommaaccent") {
+    return static_cast<char>(0xAF);
+  }
+  if (entity == "Edot") {
+    return static_cast<char>(0xB0);
+  }
+  if (entity == "edot") {
+    return static_cast<char>(0xB1);
+  }
+  if (entity == "Iogon") {
+    return static_cast<char>(0xB6);
+  }
+  if (entity == "iogon") {
+    return static_cast<char>(0xB7);
+  }
+  if (entity == "Uogon") {
+    return static_cast<char>(0xB8);
+  }
+  if (entity == "uogon") {
+    return static_cast<char>(0xB9);
+  }
+  if (entity == "Umacr") {
+    return static_cast<char>(0xBA);
+  }
+  if (entity == "umacr") {
+    return static_cast<char>(0xBB);
+  }
+  if (entity == "Dstrok") {
+    return static_cast<char>(0xBC);
+  }
+  if (entity == "dstrok") {
+    return static_cast<char>(0xBD);
+  }
+  if (entity == "ENG") {
+    return static_cast<char>(0xBE);
+  }
+  if (entity == "eng") {
+    return static_cast<char>(0xBF);
+  }
+  if (entity == "Tstrok") {
+    return static_cast<char>(0xD7);
+  }
+  if (entity == "tstrok") {
+    return static_cast<char>(0xF7);
+  }
 
   if (entity.startsWith("#")) {
     uint32_t value = 0;
@@ -372,8 +547,9 @@ char decodedEntityChar(const String &entity) {
       value = value * base + static_cast<uint32_t>(digit);
     }
 
-    if (value >= 32 && value <= 126) {
-      return static_cast<char>(value);
+    const char mapped = entityCodepointByte(value);
+    if (mapped != ' ') {
+      return mapped;
     }
     if (value == 0x2018 || value == 0x2019) {
       return '\'';
@@ -441,7 +617,8 @@ String plainTextFromXmlFragment(const String &fragment) {
 
 bool hasReadableText(const String &token) {
   for (size_t i = 0; i < token.length(); ++i) {
-    if (std::isalnum(static_cast<unsigned char>(token[i])) != 0) {
+    const uint8_t value = static_cast<uint8_t>(token[i]);
+    if (std::isalnum(value) != 0 || value >= 0x80) {
       return true;
     }
   }

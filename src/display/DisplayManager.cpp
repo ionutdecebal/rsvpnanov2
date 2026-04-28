@@ -15,6 +15,7 @@
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
 #include "display/axs15231b.h"
+#include "text/LatinText.h"
 
 namespace {
 constexpr int kDisplayWidth = BoardConfig::DISPLAY_WIDTH;
@@ -258,78 +259,74 @@ constexpr TinyGlyph kTinyGlyphs[] = {
     {'_', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F}},
 };
 
-ReaderGlyph glyphFor(char c) {
-  switch (currentReaderTypeface()) {
-    case DisplayManager::ReaderTypeface::OpenDyslexic: {
-      if (c < static_cast<char>(kEmbeddedOpenDyslexicFirstChar) ||
-          c > static_cast<char>(kEmbeddedOpenDyslexicLastChar)) {
-        c = '?';
-      }
-      const EmbeddedOpenDyslexicGlyph &glyph =
-          kEmbeddedOpenDyslexicGlyphs[static_cast<uint8_t>(c) - kEmbeddedOpenDyslexicFirstChar];
-      return {kEmbeddedOpenDyslexicBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-              glyph.xAdvance, kEmbeddedOpenDyslexicHeight};
-    }
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
-      if (c < static_cast<char>(kEmbeddedAtkinsonFirstChar) ||
-          c > static_cast<char>(kEmbeddedAtkinsonLastChar)) {
-        c = '?';
-      }
-      const EmbeddedAtkinsonGlyph &glyph =
-          kEmbeddedAtkinsonGlyphs[static_cast<uint8_t>(c) - kEmbeddedAtkinsonFirstChar];
-      return {kEmbeddedAtkinsonBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-              glyph.xAdvance, kEmbeddedAtkinsonHeight};
-    }
-    case DisplayManager::ReaderTypeface::Standard:
-    default:
-      break;
+ReaderGlyph serifGlyphForByte(uint8_t value) {
+  if (value < kEmbeddedSerifFirstChar || value > kEmbeddedSerifLastChar) {
+    value = static_cast<uint8_t>('?');
   }
-
-  if (c < static_cast<char>(kEmbeddedSerifFirstChar) ||
-      c > static_cast<char>(kEmbeddedSerifLastChar)) {
-    c = '?';
-  }
-  const EmbeddedSerifGlyph &glyph =
-      kEmbeddedSerifGlyphs[static_cast<uint8_t>(c) - kEmbeddedSerifFirstChar];
+  const EmbeddedSerifGlyph &glyph = kEmbeddedSerifGlyphs[value - kEmbeddedSerifFirstChar];
   return {kEmbeddedSerifBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
           kEmbeddedSerifHeight};
 }
 
-ReaderGlyph glyph70For(char c) {
+ReaderGlyph serif70GlyphForByte(uint8_t value) {
+  if (value < kEmbeddedSerif70FirstChar || value > kEmbeddedSerif70LastChar) {
+    value = static_cast<uint8_t>('?');
+  }
+  const EmbeddedSerif70Glyph &glyph = kEmbeddedSerif70Glyphs[value - kEmbeddedSerif70FirstChar];
+  return {kEmbeddedSerif70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+          glyph.xAdvance, kEmbeddedSerif70Height};
+}
+
+ReaderGlyph glyphFor(char c) {
+  const uint8_t value = LatinText::byteValue(c);
+
   switch (currentReaderTypeface()) {
-    case DisplayManager::ReaderTypeface::OpenDyslexic: {
-      if (c < static_cast<char>(kEmbeddedOpenDyslexic70FirstChar) ||
-          c > static_cast<char>(kEmbeddedOpenDyslexic70LastChar)) {
-        c = '?';
+    case DisplayManager::ReaderTypeface::OpenDyslexic:
+      if (value >= kEmbeddedOpenDyslexicFirstChar && value <= kEmbeddedOpenDyslexicLastChar) {
+        const EmbeddedOpenDyslexicGlyph &glyph =
+            kEmbeddedOpenDyslexicGlyphs[value - kEmbeddedOpenDyslexicFirstChar];
+        return {kEmbeddedOpenDyslexicBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+                glyph.xAdvance, kEmbeddedOpenDyslexicHeight};
       }
-      const EmbeddedOpenDyslexic70Glyph &glyph = kEmbeddedOpenDyslexic70Glyphs[
-          static_cast<uint8_t>(c) - kEmbeddedOpenDyslexic70FirstChar];
-      return {kEmbeddedOpenDyslexic70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-              glyph.xAdvance, kEmbeddedOpenDyslexic70Height};
-    }
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
-      if (c < static_cast<char>(kEmbeddedAtkinson70FirstChar) ||
-          c > static_cast<char>(kEmbeddedAtkinson70LastChar)) {
-        c = '?';
+      return serifGlyphForByte(value);
+    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
+      if (value >= kEmbeddedAtkinsonFirstChar && value <= kEmbeddedAtkinsonLastChar) {
+        const EmbeddedAtkinsonGlyph &glyph =
+            kEmbeddedAtkinsonGlyphs[value - kEmbeddedAtkinsonFirstChar];
+        return {kEmbeddedAtkinsonBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+                glyph.xAdvance, kEmbeddedAtkinsonHeight};
       }
-      const EmbeddedAtkinson70Glyph &glyph =
-          kEmbeddedAtkinson70Glyphs[static_cast<uint8_t>(c) - kEmbeddedAtkinson70FirstChar];
-      return {kEmbeddedAtkinson70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-              glyph.xAdvance, kEmbeddedAtkinson70Height};
-    }
+      return serifGlyphForByte(value);
     case DisplayManager::ReaderTypeface::Standard:
     default:
-      break;
+      return serifGlyphForByte(value);
   }
+}
 
-  if (c < static_cast<char>(kEmbeddedSerif70FirstChar) ||
-      c > static_cast<char>(kEmbeddedSerif70LastChar)) {
-    c = '?';
+ReaderGlyph glyph70For(char c) {
+  const uint8_t value = LatinText::byteValue(c);
+
+  switch (currentReaderTypeface()) {
+    case DisplayManager::ReaderTypeface::OpenDyslexic:
+      if (value >= kEmbeddedOpenDyslexic70FirstChar && value <= kEmbeddedOpenDyslexic70LastChar) {
+        const EmbeddedOpenDyslexic70Glyph &glyph =
+            kEmbeddedOpenDyslexic70Glyphs[value - kEmbeddedOpenDyslexic70FirstChar];
+        return {kEmbeddedOpenDyslexic70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+                glyph.xAdvance, kEmbeddedOpenDyslexic70Height};
+      }
+      return serif70GlyphForByte(value);
+    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
+      if (value >= kEmbeddedAtkinson70FirstChar && value <= kEmbeddedAtkinson70LastChar) {
+        const EmbeddedAtkinson70Glyph &glyph =
+            kEmbeddedAtkinson70Glyphs[value - kEmbeddedAtkinson70FirstChar];
+        return {kEmbeddedAtkinson70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+                glyph.xAdvance, kEmbeddedAtkinson70Height};
+      }
+      return serif70GlyphForByte(value);
+    case DisplayManager::ReaderTypeface::Standard:
+    default:
+      return serif70GlyphForByte(value);
   }
-  const EmbeddedSerif70Glyph &glyph =
-      kEmbeddedSerif70Glyphs[static_cast<uint8_t>(c) - kEmbeddedSerif70FirstChar];
-  return {kEmbeddedSerif70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
-          kEmbeddedSerif70Height};
 }
 
 const uint8_t *tinyRowsFor(char c) {
@@ -356,8 +353,11 @@ uint16_t panelColor(uint16_t rgb565) {
   return static_cast<uint16_t>((rgb565 << 8) | (rgb565 >> 8));
 }
 
-bool isWordCharacter(char c) {
-  return std::isalnum(static_cast<unsigned char>(c)) != 0;
+bool isWordCharacter(char c) { return LatinText::isWordCharacter(LatinText::byteValue(c)); }
+
+uint8_t tinyFallbackScalePercent(int scale) {
+  const int scaled = std::max(1, scale) * 12;
+  return static_cast<uint8_t>(std::max(10, std::min(60, scaled)));
 }
 
 int scaledAdvance(int value, int divisor) {
@@ -990,6 +990,9 @@ int DisplayManager::measureTinyTextWidth(const String &text, int scale) const {
   if (text.isEmpty()) {
     return 0;
   }
+  if (LatinText::hasExtendedBytes(text)) {
+    return measureSerifTextWidthScaled(text, tinyFallbackScalePercent(scale));
+  }
   return static_cast<int>(text.length()) * (kTinyGlyphWidth + kTinyGlyphSpacing) * scale -
          kTinyGlyphSpacing * scale;
 }
@@ -1058,7 +1061,7 @@ void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, 
     return;
   }
 
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = glyph.height;
   const int scaledWidth = std::max(1, (glyph.width + divisor - 1) / divisor);
   const int scaledHeight = std::max(1, (glyphHeight + divisor - 1) / divisor);
 
@@ -1140,7 +1143,7 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
     return;
   }
 
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = glyph.height;
   const int scaledWidth = scaledPercentDimension(glyph.width, scalePercent);
   const int scaledHeight = scaledPercentDimension(glyphHeight, scalePercent);
 
@@ -1283,6 +1286,11 @@ void DisplayManager::drawTinyGlyph(int x, int y, char c, uint16_t color, int sca
 }
 
 void DisplayManager::drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale) {
+  if (LatinText::hasExtendedBytes(text)) {
+    drawSerifTextScaledAt(text, x, y, color, tinyFallbackScalePercent(scale));
+    return;
+  }
+
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     drawTinyGlyph(cursorX, y, text[i], color, scale);

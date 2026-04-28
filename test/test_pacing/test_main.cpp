@@ -131,6 +131,27 @@ void test_short_word_period_no_pause(void) {
   TEST_ASSERT_EQUAL(200u, duration(300, "it.", "was"));
 }
 
+void test_accented_lowercase_next_word_suppresses_sentence_pause(void) {
+  // "done." next "e-acute-lan" (stored as Latin-1 \xE9 after normalization) should suppress sentence pause.
+  TEST_ASSERT_EQUAL(200u, duration(300, "done.", "\xE9lan"));
+}
+
+void test_extended_latin_lowercase_next_word_suppresses_sentence_pause(void) {
+  // "done." next "oe-ligature-uvre" (stored in the custom slot map as \x81) should also suppress
+  // a false sentence pause.
+  TEST_ASSERT_EQUAL(200u, duration(300, "done.", "\x81uvre"));
+}
+
+void test_extended_latin_uppercase_next_word_keeps_sentence_pause(void) {
+  // "done." next "OE-ligature-uvre" (custom slot \x80) should still read as a sentence break.
+  TEST_ASSERT_EQUAL(470u, duration(300, "done.", "\x80uvre"));
+}
+
+void test_baltic_lowercase_next_word_suppresses_sentence_pause(void) {
+  // "done." next "a-macron-trums" (custom slot \xA2) should also count as a lowercase start.
+  TEST_ASSERT_EQUAL(200u, duration(300, "done.", "\xA2trums"));
+}
+
 void test_sentence_pause_not_suppressed_for_long_word(void) {
   // "chapter." next "The" (uppercase) → readable=7 > 4, not a known abbreviation → sentence pause
   // length bonus: readable=7, tier1 extra=1 → 1*6=6%. syllable: c,h,a(1),p,t,e(2),r. lettersOnly="chapter"
@@ -152,6 +173,23 @@ void test_long_word_length_bonus(void) {
   // No punctuation.
   // total = 12% → 200 + 24 = 224
   TEST_ASSERT_EQUAL(224u, duration(300, "strength", "and"));
+}
+
+void test_accented_latin_word_counts_as_readable(void) {
+  TEST_ASSERT_EQUAL(200u, duration(300, "caf\xE9", "et"));
+}
+
+void test_extended_latin_word_counts_as_readable(void) {
+  TEST_ASSERT_EQUAL(200u, duration(300, "\x83""odz", "ma"));
+}
+
+void test_baltic_custom_vowel_affects_syllable_bonus(void) {
+  // "a-macron-kula" has three vowel groups (a-macron, u, a) and should pick up a 10% complexity bonus.
+  TEST_ASSERT_EQUAL(220u, duration(300, "\xA2kula", "ir"));
+}
+
+void test_sami_custom_letter_counts_as_readable(void) {
+  TEST_ASSERT_EQUAL(200u, duration(300, "\xF7""ahti", "ja"));
 }
 
 void test_very_long_word_extra_tier(void) {
@@ -310,9 +348,17 @@ int main(void) {
   RUN_TEST(test_known_abbreviation_no_pause);
   RUN_TEST(test_dotted_initialism_no_pause);
   RUN_TEST(test_short_word_period_no_pause);
+  RUN_TEST(test_accented_lowercase_next_word_suppresses_sentence_pause);
+  RUN_TEST(test_extended_latin_lowercase_next_word_suppresses_sentence_pause);
+  RUN_TEST(test_extended_latin_uppercase_next_word_keeps_sentence_pause);
+  RUN_TEST(test_baltic_lowercase_next_word_suppresses_sentence_pause);
   RUN_TEST(test_sentence_pause_not_suppressed_for_long_word);
 
   RUN_TEST(test_long_word_length_bonus);
+  RUN_TEST(test_accented_latin_word_counts_as_readable);
+  RUN_TEST(test_extended_latin_word_counts_as_readable);
+  RUN_TEST(test_baltic_custom_vowel_affects_syllable_bonus);
+  RUN_TEST(test_sami_custom_letter_counts_as_readable);
   RUN_TEST(test_very_long_word_extra_tier);
   RUN_TEST(test_compound_word_bonus);
   RUN_TEST(test_all_caps_complexity);
