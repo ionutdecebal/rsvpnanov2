@@ -5,6 +5,9 @@ RSVP Nano is an open-source ESP32-S3 reading device for showing text one word at
 ## Highlights
 
 - One-word RSVP reader with stable anchor alignment.
+- Optional page-scroll reading mode that keeps the same pacing/book-position mechanics without the RSVP anchor.
+- Hold to read, double-tap to lock autoplay, tap to stop locked autoplay, and pause on sentence boundaries.
+- Horizontal scrub preview with hold-to-scroll text browsing, then tap to return to RSVP.
 - Adjustable typeface, font size, typography, anchor guides, pacing, and phantom words.
 - Menu language selection for English, Spanish, French, German, Romanian, and Polish.
 - Chapter and paragraph-aware navigation.
@@ -29,6 +32,11 @@ into `.rsvp`, downloading a `.zip` of the results, cleaning interrupted sidecar 
 the converted outputs back into the SD card's `/books` folder.
 
 On the device, you can switch the menu language in `Settings -> Display -> Language`.
+You can also switch between anchored RSVP and the page scroller in `Settings -> Display ->
+Reading mode`.
+While paused in RSVP mode, swipe left or right to open the larger scrub preview, hold and move
+your finger vertically to browse smoothly through the text, and tap to return to the anchored
+word view.
 
 The browser workflow currently accepts:
 
