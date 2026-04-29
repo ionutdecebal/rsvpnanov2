@@ -63,6 +63,10 @@ enum class UiText : uint8_t {
   Medium,
   Small,
   Standard,
+  Touch,
+  TouchMode,
+  Hold,
+  Toggle,
 };
 
 namespace Localization {
@@ -202,6 +206,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Pequeno";
         case UiText::Standard:
           return "Estandar";
+        case UiText::Touch:
+          return "Tactil";
+        case UiText::TouchMode:
+          return "Modo tactil";
+        case UiText::Hold:
+          return "Mantener";
+        case UiText::Toggle:
+          return "Alternar";
       }
       break;
     case UiLanguage::French:
@@ -306,6 +318,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Petit";
         case UiText::Standard:
           return "Standard";
+        case UiText::Touch:
+          return "Tactile";
+        case UiText::TouchMode:
+          return "Mode tactile";
+        case UiText::Hold:
+          return "Maintenir";
+        case UiText::Toggle:
+          return "Bascule";
       }
       break;
     case UiLanguage::German:
@@ -410,6 +430,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Klein";
         case UiText::Standard:
           return "Standard";
+        case UiText::Touch:
+          return "Touch";
+        case UiText::TouchMode:
+          return "Tippmodus";
+        case UiText::Hold:
+          return "Halten";
+        case UiText::Toggle:
+          return "Umschalten";
       }
       break;
     case UiLanguage::Romanian:
@@ -514,6 +542,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Mic";
         case UiText::Standard:
           return "Standard";
+        case UiText::Touch:
+          return "Atingere";
+        case UiText::TouchMode:
+          return "Mod atingere";
+        case UiText::Hold:
+          return "Tine apasat";
+        case UiText::Toggle:
+          return "Comuta";
       }
       break;
     case UiLanguage::Polish:
@@ -618,6 +654,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Maly";
         case UiText::Standard:
           return "Standard";
+        case UiText::Touch:
+          return "Dotyk";
+        case UiText::TouchMode:
+          return "Tryb dotyku";
+        case UiText::Hold:
+          return "Przytrzymaj";
+        case UiText::Toggle:
+          return "Przelacz";
       }
       break;
     case UiLanguage::English:
@@ -723,6 +767,14 @@ inline const char *text(UiLanguage language, UiText key) {
           return "Small";
         case UiText::Standard:
           return "Standard";
+        case UiText::Touch:
+          return "Touch";
+        case UiText::TouchMode:
+          return "Touch mode";
+        case UiText::Hold:
+          return "Hold";
+        case UiText::Toggle:
+          return "Toggle";
       }
       break;
   }

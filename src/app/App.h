@@ -40,11 +40,17 @@ class App {
     Wpm,
   };
 
+  enum class TouchMode : uint8_t {
+    Hold = 0,
+    Toggle = 1,
+  };
+
   enum class MenuScreen {
     Main,
     SettingsHome,
     SettingsDisplay,
     SettingsPacing,
+    SettingsTouch,
     TypographyTuning,
     BookPicker,
     ChapterPicker,
@@ -84,6 +90,8 @@ class App {
   void rebuildSettingsMenuItems();
   void applyPacingSettings();
   String pacingDelayLabel(uint16_t delayMs) const;
+  String touchModeLabel() const;
+  void cycleTouchMode();
   String themeModeLabel() const;
   String phantomWordsLabel() const;
   String focusHighlightLabel() const;
@@ -205,6 +213,7 @@ class App {
   bool phantomWordsEnabled_ = true;
   bool darkMode_ = true;
   bool nightMode_ = false;
+  TouchMode touchMode_ = TouchMode::Hold;
   UiLanguage uiLanguage_ = UiLanguage::English;
   DisplayManager::TypographyConfig typographyConfig_;
 };

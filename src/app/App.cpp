@@ -95,6 +95,7 @@ constexpr size_t kSettingsBackIndex = 0;
 constexpr size_t kSettingsHomeDisplayIndex = 1;
 constexpr size_t kSettingsHomeTypographyIndex = 2;
 constexpr size_t kSettingsHomePacingIndex = 3;
+constexpr size_t kSettingsHomeTouchIndex = 4;
 constexpr size_t kSettingsDisplayThemeIndex = 1;
 constexpr size_t kSettingsDisplayBrightnessIndex = 2;
 constexpr size_t kSettingsDisplayLanguageIndex = 3;
@@ -102,6 +103,7 @@ constexpr size_t kSettingsPacingLongWordsIndex = 1;
 constexpr size_t kSettingsPacingComplexityIndex = 2;
 constexpr size_t kSettingsPacingPunctuationIndex = 3;
 constexpr size_t kSettingsPacingResetIndex = 4;
+constexpr size_t kSettingsTouchModeIndex = 1;
 
 constexpr size_t kBookPickerBackIndex = 0;
 constexpr size_t kChapterPickerBackIndex = 0;
@@ -128,6 +130,7 @@ constexpr const char *kPrefTypographyTracking = "type_trk";
 constexpr const char *kPrefTypographyAnchor = "type_anc";
 constexpr const char *kPrefTypographyGuideWidth = "type_wid";
 constexpr const char *kPrefTypographyGuideGap = "type_gap";
+constexpr const char *kPrefTouchMode = "touch_mode";
 constexpr const char *kPrefRecentSeq = "seq";
 constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
@@ -307,6 +310,13 @@ void App::begin() {
       kTypographyGuideGapMin, kTypographyGuideGapMax));
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
+  {
+    uint8_t storedTouchMode = preferences_.getUChar(kPrefTouchMode, static_cast<uint8_t>(touchMode_));
+    if (storedTouchMode > static_cast<uint8_t>(TouchMode::Toggle)) {
+      storedTouchMode = static_cast<uint8_t>(TouchMode::Hold);
+    }
+    touchMode_ = static_cast<TouchMode>(storedTouchMode);
+  }
   applyDisplayPreferences(0, false);
   applyTypographySettings(0, false);
   applyPacingSettings();
@@ -498,12 +508,9 @@ void App::updateState(uint32_t nowMs) {
     return;
   }
 
-  if (touchPlayHeld_) {
-    setState(AppState::Playing, nowMs);
-    return;
+  if (touchMode_ == TouchMode::Hold) {
+    setState(touchPlayHeld_ ? AppState::Playing : AppState::Paused, nowMs);
   }
-
-  setState(AppState::Paused, nowMs);
 }
 
 void App::updateReader(uint32_t nowMs) {
@@ -643,7 +650,7 @@ void App::applyDisplayPreferences(uint32_t nowMs, bool rerender) {
 
   if (state_ == AppState::Menu) {
     if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-        menuScreen_ == MenuScreen::SettingsPacing) {
+        menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
       rebuildSettingsMenuItems();
       renderSettings();
       return;
@@ -734,7 +741,7 @@ void App::cycleUiLanguage(uint32_t nowMs) {
 
   if (state_ == AppState::Menu) {
     if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-        menuScreen_ == MenuScreen::SettingsPacing) {
+        menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
       rebuildSettingsMenuItems();
       renderSettings();
       return;
@@ -855,6 +862,37 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   }
 
   if (state_ == AppState::Playing) {
+    if (touchMode_ != TouchMode::Toggle) {
+      return;
+    }
+    if (event.phase == TouchPhase::Start) {
+      pausedTouch_.active = true;
+      pausedTouchIntent_ = TouchIntent::None;
+      pausedTouch_.startX = event.x;
+      pausedTouch_.startY = event.y;
+      pausedTouch_.lastX = event.x;
+      pausedTouch_.lastY = event.y;
+      pausedTouch_.startMs = nowMs;
+      pausedTouch_.lastMs = nowMs;
+      return;
+    }
+    if (!pausedTouch_.active) {
+      return;
+    }
+    pausedTouch_.lastX = event.x;
+    pausedTouch_.lastY = event.y;
+    pausedTouch_.lastMs = nowMs;
+    if (event.phase != TouchPhase::End) {
+      return;
+    }
+    const int dx = abs(static_cast<int>(event.x) - static_cast<int>(pausedTouch_.startX));
+    const int dy = abs(static_cast<int>(event.y) - static_cast<int>(pausedTouch_.startY));
+    pausedTouch_.active = false;
+    pausedTouchIntent_ = TouchIntent::None;
+    if (dx <= static_cast<int>(kTapSlopPx) && dy <= static_cast<int>(kTapSlopPx)) {
+      wpmFeedbackVisible_ = false;
+      setState(AppState::Paused, nowMs);
+    }
     return;
   }
 
@@ -891,7 +929,8 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
                        absDeltaY <= static_cast<int>(kTapSlopPx);
 
   if (!ended && pausedTouchIntent_ == TouchIntent::None &&
-      pressDurationMs >= kTouchPlayHoldMs && tapLike) {
+      pressDurationMs >= kTouchPlayHoldMs && tapLike &&
+      touchMode_ == TouchMode::Hold) {
     touchPlayHeld_ = true;
     pausedTouchIntent_ = TouchIntent::PlayHold;
     wpmFeedbackVisible_ = false;
@@ -936,11 +975,15 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   }
 
   if (ended) {
+    const bool tapToggle = tapLike && pausedTouchIntent_ == TouchIntent::None &&
+                           touchMode_ == TouchMode::Toggle;
     pausedTouch_.active = false;
     pausedTouchIntent_ = TouchIntent::None;
+    if (tapToggle) {
+      wpmFeedbackVisible_ = false;
+      setState(AppState::Playing, nowMs);
+    }
   }
-
-  // Paused taps are intentionally ignored unless they become part of the UX.
 }
 
 int App::scrubStepsForDrag(int deltaX) const {
@@ -1026,7 +1069,7 @@ void App::moveMenuSelection(int direction) {
   size_t *selectedIndex = &menuSelectedIndex_;
   size_t itemCount = MenuItemCount;
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
     selectedIndex = &settingsSelectedIndex_;
     itemCount = settingsMenuItems_.size();
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
@@ -1058,7 +1101,7 @@ void App::moveMenuSelection(int direction) {
 
   renderMenu();
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
     Serial.printf("[settings] selected=%s\n", settingsMenuItems_[settingsSelectedIndex_].c_str());
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     Serial.printf("[typography] selected=%s\n", typographyTuningLabel().c_str());
@@ -1113,7 +1156,7 @@ void App::moveMenuSelection(int direction) {
 
 void App::selectMenuItem(uint32_t nowMs) {
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
     selectSettingsItem(nowMs);
     return;
   }
@@ -1191,6 +1234,30 @@ void App::selectSettingsItem(uint32_t nowMs) {
       case kSettingsHomePacingIndex:
         settingsSelectedIndex_ = kSettingsPacingLongWordsIndex;
         menuScreen_ = MenuScreen::SettingsPacing;
+        rebuildSettingsMenuItems();
+        renderSettings();
+        return;
+      case kSettingsHomeTouchIndex:
+        settingsSelectedIndex_ = kSettingsTouchModeIndex;
+        menuScreen_ = MenuScreen::SettingsTouch;
+        rebuildSettingsMenuItems();
+        renderSettings();
+        return;
+      default:
+        return;
+    }
+  }
+
+  if (menuScreen_ == MenuScreen::SettingsTouch) {
+    switch (settingsSelectedIndex_) {
+      case kSettingsBackIndex:
+        settingsSelectedIndex_ = kSettingsHomeTouchIndex;
+        menuScreen_ = MenuScreen::SettingsHome;
+        rebuildSettingsMenuItems();
+        renderSettings();
+        return;
+      case kSettingsTouchModeIndex:
+        cycleTouchMode();
         rebuildSettingsMenuItems();
         renderSettings();
         return;
@@ -1360,6 +1427,10 @@ void App::rebuildSettingsMenuItems() {
     settingsMenuItems_.push_back(uiText(UiText::Display));
     settingsMenuItems_.push_back(uiText(UiText::TypographyTune));
     settingsMenuItems_.push_back(uiText(UiText::WordPacing));
+    settingsMenuItems_.push_back(uiText(UiText::Touch));
+  } else if (menuScreen_ == MenuScreen::SettingsTouch) {
+    settingsMenuItems_.push_back(uiText(UiText::Back));
+    settingsMenuItems_.push_back(uiText(UiText::TouchMode) + ": " + touchModeLabel());
   } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
     settingsMenuItems_.push_back(uiText(UiText::Back));
     settingsMenuItems_.push_back(uiText(UiText::Theme) + ": " + themeModeLabel());
@@ -1396,6 +1467,16 @@ void App::applyPacingSettings() {
 }
 
 String App::pacingDelayLabel(uint16_t delayMs) const { return String(delayMs) + " ms"; }
+
+String App::touchModeLabel() const {
+  return touchMode_ == TouchMode::Toggle ? uiText(UiText::Toggle) : uiText(UiText::Hold);
+}
+
+void App::cycleTouchMode() {
+  touchMode_ = touchMode_ == TouchMode::Hold ? TouchMode::Toggle : TouchMode::Hold;
+  preferences_.putUChar(kPrefTouchMode, static_cast<uint8_t>(touchMode_));
+  Serial.printf("[touch] mode=%s\n", touchModeLabel().c_str());
+}
 
 String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }
 
@@ -2007,7 +2088,7 @@ int App::findBookIndexByPath(const String &path) const {
 
 void App::renderMenu() {
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::SettingsTouch) {
     renderSettings();
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     renderTypographyTuning();
