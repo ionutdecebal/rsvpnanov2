@@ -7,6 +7,30 @@ namespace LatinText {
 
 inline uint8_t byteValue(char c) { return static_cast<uint8_t>(c); }
 
+inline bool isLowCustomSlotByte(uint8_t value) {
+  switch (value) {
+    case 0x01:
+    case 0x02:
+    case 0x03:
+    case 0x04:
+    case 0x05:
+    case 0x06:
+    case 0x07:
+    case 0x08:
+    case 0x0E:
+    case 0x0F:
+    case 0x10:
+    case 0x11:
+    case 0x12:
+    case 0x13:
+    case 0x14:
+    case 0x15:
+      return true;
+    default:
+      return false;
+  }
+}
+
 inline bool isRepurposedLatin1Byte(uint8_t value) {
   switch (value) {
     case 0xA1:
@@ -49,6 +73,54 @@ inline bool isRepurposedLatin1Byte(uint8_t value) {
 
 inline bool customSlotForCodepoint(uint32_t codepoint, uint8_t &slot) {
   switch (codepoint) {
+    case 0x010E:
+      slot = 0x01;
+      return true;
+    case 0x010F:
+      slot = 0x02;
+      return true;
+    case 0x011A:
+      slot = 0x03;
+      return true;
+    case 0x011B:
+      slot = 0x04;
+      return true;
+    case 0x0147:
+      slot = 0x05;
+      return true;
+    case 0x0148:
+      slot = 0x06;
+      return true;
+    case 0x0158:
+      slot = 0x07;
+      return true;
+    case 0x0159:
+      slot = 0x08;
+      return true;
+    case 0x0164:
+      slot = 0x0E;
+      return true;
+    case 0x0165:
+      slot = 0x0F;
+      return true;
+    case 0x016E:
+      slot = 0x10;
+      return true;
+    case 0x016F:
+      slot = 0x11;
+      return true;
+    case 0x0150:
+      slot = 0x12;
+      return true;
+    case 0x0151:
+      slot = 0x13;
+      return true;
+    case 0x0170:
+      slot = 0x14;
+      return true;
+    case 0x0171:
+      slot = 0x15;
+      return true;
     case 0x0152:
       slot = 0x80;
       return true;
@@ -273,6 +345,30 @@ inline bool storageByteForCodepoint(uint32_t codepoint, uint8_t &value) {
 
 inline bool customLowercaseByte(uint8_t value, uint8_t &lowercase) {
   switch (value) {
+    case 0x01:
+      lowercase = 0x02;
+      return true;
+    case 0x03:
+      lowercase = 0x04;
+      return true;
+    case 0x05:
+      lowercase = 0x06;
+      return true;
+    case 0x07:
+      lowercase = 0x08;
+      return true;
+    case 0x0E:
+      lowercase = 0x0F;
+      return true;
+    case 0x10:
+      lowercase = 0x11;
+      return true;
+    case 0x12:
+      lowercase = 0x13;
+      return true;
+    case 0x14:
+      lowercase = 0x15;
+      return true;
     case 0x80:
       lowercase = 0x81;
       return true;
@@ -381,6 +477,14 @@ inline bool isCustomUppercaseLetter(uint8_t value) {
 
 inline bool isCustomLowercaseLetter(uint8_t value) {
   switch (value) {
+    case 0x02:
+    case 0x04:
+    case 0x06:
+    case 0x08:
+    case 0x0F:
+    case 0x11:
+    case 0x13:
+    case 0x15:
     case 0x81:
     case 0x83:
     case 0x85:
@@ -492,6 +596,7 @@ inline bool isVowel(uint8_t value) {
     case 0x95:
     case 0x97:
     case 0x99:
+    case 0x04:
     case 0xA2:
     case 0xA4:
     case 0xA8:
@@ -499,6 +604,9 @@ inline bool isVowel(uint8_t value) {
     case 0xB7:
     case 0xB9:
     case 0xBB:
+    case 0x11:
+    case 0x13:
+    case 0x15:
       return true;
     default:
       return false;
@@ -507,11 +615,197 @@ inline bool isVowel(uint8_t value) {
 
 inline bool hasExtendedBytes(const String &text) {
   for (size_t i = 0; i < text.length(); ++i) {
-    if (byteValue(text[i]) > 126) {
+    const uint8_t value = byteValue(text[i]);
+    if (value > 126 || isLowCustomSlotByte(value)) {
       return true;
     }
   }
   return false;
+}
+
+inline uint8_t fallbackAsciiByte(uint8_t value) {
+  if (value >= 32 && value <= 126) {
+    return value;
+  }
+
+  switch (value) {
+    case 0x01:
+    case 0xBC:
+    case 0xD0:
+      return 'D';
+    case 0x02:
+    case 0xBD:
+    case 0xF0:
+      return 'd';
+    case 0x03:
+    case 0x98:
+    case 0xA3:
+    case 0xB0:
+    case 0xC8:
+    case 0xC9:
+    case 0xCA:
+    case 0xCB:
+      return 'E';
+    case 0x04:
+    case 0x99:
+    case 0xA4:
+    case 0xB1:
+    case 0xE8:
+    case 0xE9:
+    case 0xEA:
+    case 0xEB:
+      return 'e';
+    case 0x05:
+    case 0x9C:
+    case 0xAE:
+    case 0xBE:
+    case 0xD1:
+      return 'N';
+    case 0x06:
+    case 0x9D:
+    case 0xAF:
+    case 0xBF:
+    case 0xF1:
+      return 'n';
+    case 0x07:
+      return 'R';
+    case 0x08:
+      return 'r';
+    case 0x0E:
+    case 0x8E:
+    case 0xD7:
+    case 0xDE:
+      return 'T';
+    case 0x0F:
+    case 0x8F:
+    case 0xF7:
+    case 0xFE:
+      return 't';
+    case 0x10:
+    case 0x14:
+    case 0xB8:
+    case 0xBA:
+    case 0xD9:
+    case 0xDA:
+    case 0xDB:
+    case 0xDC:
+      return 'U';
+    case 0x11:
+    case 0x15:
+    case 0xB9:
+    case 0xBB:
+    case 0xF9:
+    case 0xFA:
+    case 0xFB:
+    case 0xFC:
+      return 'u';
+    case 0x12:
+    case 0x80:
+    case 0xD2:
+    case 0xD3:
+    case 0xD4:
+    case 0xD5:
+    case 0xD6:
+    case 0xD8:
+      return 'O';
+    case 0x13:
+    case 0x81:
+    case 0xF2:
+    case 0xF3:
+    case 0xF4:
+    case 0xF5:
+    case 0xF6:
+    case 0xF8:
+      return 'o';
+    case 0x82:
+    case 0xAB:
+      return 'L';
+    case 0x83:
+    case 0xAC:
+      return 'l';
+    case 0x84:
+    case 0x9A:
+    case 0xC7:
+      return 'C';
+    case 0x85:
+    case 0x9B:
+    case 0xE7:
+      return 'c';
+    case 0x86:
+    case 0x8C:
+    case 0x92:
+    case 0x9E:
+      return 'S';
+    case 0x87:
+    case 0x8D:
+    case 0x93:
+    case 0x9F:
+    case 0xDF:
+      return 's';
+    case 0x88:
+    case 0xB2:
+    case 0xB4:
+      return 'Z';
+    case 0x89:
+    case 0xB3:
+    case 0xB5:
+      return 'z';
+    case 0x8A:
+    case 0x96:
+    case 0xA1:
+    case 0xC0:
+    case 0xC1:
+    case 0xC2:
+    case 0xC3:
+    case 0xC4:
+    case 0xC5:
+    case 0xC6:
+      return 'A';
+    case 0x8B:
+    case 0x97:
+    case 0xA2:
+    case 0xE0:
+    case 0xE1:
+    case 0xE2:
+    case 0xE3:
+    case 0xE4:
+    case 0xE5:
+    case 0xE6:
+      return 'a';
+    case 0x90:
+    case 0xA5:
+      return 'G';
+    case 0x91:
+    case 0xA6:
+      return 'g';
+    case 0x94:
+    case 0xA7:
+    case 0xB6:
+    case 0xCC:
+    case 0xCD:
+    case 0xCE:
+    case 0xCF:
+      return 'I';
+    case 0x95:
+    case 0xA8:
+    case 0xB7:
+    case 0xEC:
+    case 0xED:
+    case 0xEE:
+    case 0xEF:
+      return 'i';
+    case 0xA9:
+      return 'K';
+    case 0xAA:
+      return 'k';
+    case 0xDD:
+      return 'Y';
+    case 0xFD:
+    case 0xFF:
+      return 'y';
+    default:
+      return static_cast<uint8_t>('?');
+  }
 }
 
 }  // namespace LatinText

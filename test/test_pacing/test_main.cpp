@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include "reader/ReadingLoop.h"
+#include "text/LatinText.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,6 +93,14 @@ void test_strong_sentence_pause(void) {
   TEST_ASSERT_EQUAL(500u, duration(300, "yes!", "The"));
 }
 
+void test_sentence_pause_preserved_with_closing_quote(void) {
+  TEST_ASSERT_EQUAL(470u, duration(300, "\"done.\"", "The"));
+}
+
+void test_sentence_pause_preserved_with_closing_parenthesis(void) {
+  TEST_ASSERT_EQUAL(470u, duration(300, "(done.)", "The"));
+}
+
 void test_clause_pause_semicolon(void) {
   // "thus;" → clause +80% → 200 + 160 = 360
   TEST_ASSERT_EQUAL(360u, duration(300, "thus;", "the"));
@@ -152,6 +161,11 @@ void test_baltic_lowercase_next_word_suppresses_sentence_pause(void) {
   TEST_ASSERT_EQUAL(200u, duration(300, "done.", "\xA2trums"));
 }
 
+void test_czech_lowercase_next_word_suppresses_sentence_pause(void) {
+  // "done." next "e-caron-ra" (custom slot \x04) should also count as a lowercase start.
+  TEST_ASSERT_EQUAL(200u, duration(300, "done.", "\x04""ra"));
+}
+
 void test_sentence_pause_not_suppressed_for_long_word(void) {
   // "chapter." next "The" (uppercase) → readable=7 > 4, not a known abbreviation → sentence pause
   // length bonus: readable=7, tier1 extra=1 → 1*6=6%. syllable: c,h,a(1),p,t,e(2),r. lettersOnly="chapter"
@@ -188,8 +202,29 @@ void test_baltic_custom_vowel_affects_syllable_bonus(void) {
   TEST_ASSERT_EQUAL(220u, duration(300, "\xA2kula", "ir"));
 }
 
+void test_czech_extended_word_counts_as_readable(void) {
+  TEST_ASSERT_EQUAL(200u, duration(300, "b\x04h", "a"));
+}
+
+void test_hungarian_double_acute_vowel_affects_syllable_bonus(void) {
+  // "o-double-acute-voda" has three vowel groups (o-double-acute, o, a) and should pick up 10%.
+  TEST_ASSERT_EQUAL(220u, duration(300, "\x13voda", "van"));
+}
+
 void test_sami_custom_letter_counts_as_readable(void) {
   TEST_ASSERT_EQUAL(200u, duration(300, "\xF7""ahti", "ja"));
+}
+
+void test_ascii_fallback_maps_accented_latin_to_base_letter(void) {
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('e'), LatinText::fallbackAsciiByte(0xE9));
+}
+
+void test_ascii_fallback_maps_hungarian_double_acute_to_base_letter(void) {
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('o'), LatinText::fallbackAsciiByte(0x13));
+}
+
+void test_ascii_fallback_maps_spanish_enye_to_base_letter(void) {
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('n'), LatinText::fallbackAsciiByte(0xF1));
 }
 
 void test_very_long_word_extra_tier(void) {
@@ -341,6 +376,8 @@ int main(void) {
   RUN_TEST(test_comma_pause);
   RUN_TEST(test_sentence_pause);
   RUN_TEST(test_strong_sentence_pause);
+  RUN_TEST(test_sentence_pause_preserved_with_closing_quote);
+  RUN_TEST(test_sentence_pause_preserved_with_closing_parenthesis);
   RUN_TEST(test_clause_pause_semicolon);
   RUN_TEST(test_dash_pause);
   RUN_TEST(test_ellipsis_pause);
@@ -352,13 +389,19 @@ int main(void) {
   RUN_TEST(test_extended_latin_lowercase_next_word_suppresses_sentence_pause);
   RUN_TEST(test_extended_latin_uppercase_next_word_keeps_sentence_pause);
   RUN_TEST(test_baltic_lowercase_next_word_suppresses_sentence_pause);
+  RUN_TEST(test_czech_lowercase_next_word_suppresses_sentence_pause);
   RUN_TEST(test_sentence_pause_not_suppressed_for_long_word);
 
   RUN_TEST(test_long_word_length_bonus);
   RUN_TEST(test_accented_latin_word_counts_as_readable);
   RUN_TEST(test_extended_latin_word_counts_as_readable);
   RUN_TEST(test_baltic_custom_vowel_affects_syllable_bonus);
+  RUN_TEST(test_czech_extended_word_counts_as_readable);
+  RUN_TEST(test_hungarian_double_acute_vowel_affects_syllable_bonus);
   RUN_TEST(test_sami_custom_letter_counts_as_readable);
+  RUN_TEST(test_ascii_fallback_maps_accented_latin_to_base_letter);
+  RUN_TEST(test_ascii_fallback_maps_hungarian_double_acute_to_base_letter);
+  RUN_TEST(test_ascii_fallback_maps_spanish_enye_to_base_letter);
   RUN_TEST(test_very_long_word_extra_tier);
   RUN_TEST(test_compound_word_bonus);
   RUN_TEST(test_all_caps_complexity);

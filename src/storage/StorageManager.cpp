@@ -39,7 +39,43 @@ bool reachedBookWordLimit(size_t wordCount) {
   return hasBookWordLimit() && wordCount >= kMaxBookWords;
 }
 
-bool isWordBoundary(char c) { return LatinText::byteValue(c) <= ' '; }
+bool isAsciiTrimWhitespace(char c) {
+  switch (c) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\r':
+    case '\f':
+    case '\v':
+      return true;
+    default:
+      return false;
+  }
+}
+
+void trimAsciiWhitespace(String &text) {
+  size_t start = 0;
+  while (start < text.length() && isAsciiTrimWhitespace(text[start])) {
+    ++start;
+  }
+
+  size_t end = text.length();
+  while (end > start && isAsciiTrimWhitespace(text[end - 1])) {
+    --end;
+  }
+
+  if (end < text.length()) {
+    text.remove(end);
+  }
+  if (start > 0) {
+    text.remove(0, start);
+  }
+}
+
+bool isWordBoundary(char c) {
+  const uint8_t value = LatinText::byteValue(c);
+  return value <= ' ' && !LatinText::isWordCharacter(value);
+}
 
 bool prefixHasBoundary(const String &lowered, const char *prefix) {
   const size_t prefixLength = std::strlen(prefix);
@@ -51,7 +87,9 @@ bool prefixHasBoundary(const String &lowered, const char *prefix) {
   }
 
   const char next = lowered[prefixLength];
-  return next <= ' ' || next == ':' || next == '.' || next == '-';
+  const uint8_t nextValue = LatinText::byteValue(next);
+  return (nextValue <= ' ' && !LatinText::isWordCharacter(nextValue)) || next == ':' ||
+         next == '.' || next == '-';
 }
 
 bool booksDirectoryExists() {
@@ -271,24 +309,6 @@ std::vector<String> collectBookPaths() {
   return bookPaths;
 }
 
-bool isTrimmableEdgeChar(char c) {
-  switch (c) {
-    case '"':
-    case '\'':
-    case '(':
-    case ')':
-    case '[':
-    case ']':
-    case '{':
-    case '}':
-    case '<':
-    case '>':
-      return true;
-    default:
-      return false;
-  }
-}
-
 bool isUtf8Continuation(uint8_t value) { return (value & 0xC0) == 0x80; }
 
 bool decodeUtf8Codepoint(const String &text, size_t &index, uint32_t &codepoint) {
@@ -365,6 +385,11 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
   uint8_t storedByte = 0;
   if (LatinText::storageByteForCodepoint(codepoint, storedByte)) {
     target += static_cast<char>(storedByte);
+    return;
+  }
+
+  if (codepoint >= 0xFF01 && codepoint <= 0xFF5E) {
+    target += static_cast<char>(codepoint - 0xFEE0);
     return;
   }
 
@@ -447,6 +472,10 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
     case 0x00BB:
       target += '"';
       return;
+    case 0x2039:
+    case 0x203A:
+      target += '\'';
+      return;
     case 0x00BC:
       appendText(target, "1/4");
       return;
@@ -473,7 +502,69 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
     case 0x201F:
     case 0x2033:
     case 0x2036:
+    case 0x300C:
+    case 0x300D:
+    case 0x300E:
+    case 0x300F:
       target += '"';
+      return;
+    case 0x207D:
+    case 0x208D:
+    case 0x2768:
+    case 0x276A:
+    case 0xFF08:
+      target += '(';
+      return;
+    case 0x207E:
+    case 0x208E:
+    case 0x2769:
+    case 0x276B:
+    case 0xFF09:
+      target += ')';
+      return;
+    case 0x2045:
+    case 0x2308:
+    case 0x230A:
+    case 0x3010:
+    case 0x3014:
+    case 0x3016:
+    case 0x3018:
+    case 0x301A:
+    case 0xFF3B:
+      target += '[';
+      return;
+    case 0x2046:
+    case 0x2309:
+    case 0x230B:
+    case 0x3011:
+    case 0x3015:
+    case 0x3017:
+    case 0x3019:
+    case 0x301B:
+    case 0xFF3D:
+      target += ']';
+      return;
+    case 0x2774:
+    case 0x2776:
+    case 0xFF5B:
+      target += '{';
+      return;
+    case 0x2775:
+    case 0x2777:
+    case 0xFF5D:
+      target += '}';
+      return;
+    case 0x2329:
+    case 0x27E8:
+    case 0x3008:
+    case 0x300A:
+      target += '<';
+      return;
+    case 0x232A:
+    case 0x27E9:
+    case 0x3009:
+    case 0x300B:
+      target += '>';
       return;
     case 0x2010:
     case 0x2011:
@@ -491,6 +582,24 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
     case 0x2022:
     case 0x2219:
       target += '*';
+      return;
+    case 0xFF0C:
+      target += ',';
+      return;
+    case 0xFF0E:
+      target += '.';
+      return;
+    case 0xFF1A:
+      target += ':';
+      return;
+    case 0xFF1B:
+      target += ';';
+      return;
+    case 0xFF01:
+      target += '!';
+      return;
+    case 0xFF1F:
+      target += '?';
       return;
     case 0x2122:
       appendText(target, "TM");
@@ -914,7 +1023,7 @@ String normalizeDisplayText(const String &text) {
   bool previousSpace = true;
   for (size_t i = 0; i < normalized.length(); ++i) {
     const uint8_t value = LatinText::byteValue(normalized[i]);
-    if (value <= ' ') {
+    if (value <= ' ' && !LatinText::isWordCharacter(value)) {
       if (!previousSpace) {
         collapsed += ' ';
         previousSpace = true;
@@ -933,7 +1042,7 @@ String normalizeDisplayText(const String &text) {
 }
 
 void pushCleanWord(String token, std::vector<String> &words) {
-  token.trim();
+  trimAsciiWhitespace(token);
 
   if (token.length() >= 3 && static_cast<uint8_t>(token[0]) == 0xEF &&
       static_cast<uint8_t>(token[1]) == 0xBB && static_cast<uint8_t>(token[2]) == 0xBF) {
@@ -941,15 +1050,7 @@ void pushCleanWord(String token, std::vector<String> &words) {
   }
 
   token = normalizeDisplayText(token);
-  token.trim();
-
-  while (!token.isEmpty() && isTrimmableEdgeChar(token[0])) {
-    token.remove(0, 1);
-  }
-
-  while (!token.isEmpty() && isTrimmableEdgeChar(token[token.length() - 1])) {
-    token.remove(token.length() - 1, 1);
-  }
+  trimAsciiWhitespace(token);
 
   bool hasAlphaNumeric = false;
   for (size_t i = 0; i < token.length(); ++i) {
@@ -965,18 +1066,18 @@ void pushCleanWord(String token, std::vector<String> &words) {
 }
 
 String stripBom(String text) {
-  text.trim();
+  trimAsciiWhitespace(text);
   if (text.length() >= 3 && static_cast<uint8_t>(text[0]) == 0xEF &&
       static_cast<uint8_t>(text[1]) == 0xBB && static_cast<uint8_t>(text[2]) == 0xBF) {
     text.remove(0, 3);
-    text.trim();
+    trimAsciiWhitespace(text);
   }
   return text;
 }
 
 bool chapterTitleFromLine(const String &line, String &title) {
   String trimmed = normalizeDisplayText(stripBom(line));
-  trimmed.trim();
+  trimAsciiWhitespace(trimmed);
   if (trimmed.isEmpty() || trimmed.length() > kMaxChapterTitleChars) {
     return false;
   }
@@ -987,7 +1088,7 @@ bool chapterTitleFromLine(const String &line, String &title) {
       ++prefixLength;
     }
     title = trimmed.substring(prefixLength);
-    title.trim();
+    trimAsciiWhitespace(title);
     return !title.isEmpty();
   }
 
@@ -1030,10 +1131,10 @@ void addParagraphMarker(BookContent &book) {
 
 String directiveValue(const String &line, const char *directive) {
   String value = line.substring(std::strlen(directive));
-  value.trim();
+  trimAsciiWhitespace(value);
   if (!value.isEmpty() && (value[0] == ':' || value[0] == '-' || value[0] == '.')) {
     value.remove(0, 1);
-    value.trim();
+    trimAsciiWhitespace(value);
   }
   return normalizeDisplayText(value);
 }

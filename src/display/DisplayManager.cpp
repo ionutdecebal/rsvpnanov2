@@ -170,8 +170,12 @@ DisplayManager::ReaderTypeface currentReaderTypeface() {
   return sanitizeReaderTypeface(activeTypographyConfig().typeface);
 }
 
-int baseGlyphHeight() {
-  switch (currentReaderTypeface()) {
+DisplayManager::ReaderTypeface effectiveReaderTypefaceForText(const String &) {
+  return currentReaderTypeface();
+}
+
+int baseGlyphHeightForTypeface(DisplayManager::ReaderTypeface typeface) {
+  switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
       return kEmbeddedOpenDyslexicHeight;
     case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
@@ -182,8 +186,12 @@ int baseGlyphHeight() {
   }
 }
 
-int mediumGlyphHeight() {
-  switch (currentReaderTypeface()) {
+int baseGlyphHeight() {
+  return baseGlyphHeightForTypeface(currentReaderTypeface());
+}
+
+int mediumGlyphHeightForTypeface(DisplayManager::ReaderTypeface typeface) {
+  switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
       return kEmbeddedOpenDyslexic70Height;
     case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
@@ -192,6 +200,10 @@ int mediumGlyphHeight() {
     default:
       return kEmbeddedSerif70Height;
   }
+}
+
+int mediumGlyphHeight() {
+  return mediumGlyphHeightForTypeface(currentReaderTypeface());
 }
 
 struct ReaderTextStyle {
@@ -277,71 +289,93 @@ ReaderGlyph serif70GlyphForByte(uint8_t value) {
           glyph.xAdvance, kEmbeddedSerif70Height};
 }
 
-ReaderGlyph glyphFor(char c) {
+ReaderGlyph glyphFor(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
 
-  switch (currentReaderTypeface()) {
-    case DisplayManager::ReaderTypeface::OpenDyslexic:
-      if (value >= kEmbeddedOpenDyslexicFirstChar && value <= kEmbeddedOpenDyslexicLastChar) {
-        const EmbeddedOpenDyslexicGlyph &glyph =
-            kEmbeddedOpenDyslexicGlyphs[value - kEmbeddedOpenDyslexicFirstChar];
-        return {kEmbeddedOpenDyslexicBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-                glyph.xAdvance, kEmbeddedOpenDyslexicHeight};
-      }
-      return serifGlyphForByte(value);
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
-      if (value >= kEmbeddedAtkinsonFirstChar && value <= kEmbeddedAtkinsonLastChar) {
-        const EmbeddedAtkinsonGlyph &glyph =
-            kEmbeddedAtkinsonGlyphs[value - kEmbeddedAtkinsonFirstChar];
-        return {kEmbeddedAtkinsonBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-                glyph.xAdvance, kEmbeddedAtkinsonHeight};
-      }
-      return serifGlyphForByte(value);
+  switch (typeface) {
+    case DisplayManager::ReaderTypeface::OpenDyslexic: {
+      const uint8_t glyphValue =
+          (value >= kEmbeddedOpenDyslexicFirstChar && value <= kEmbeddedOpenDyslexicLastChar)
+              ? value
+              : LatinText::fallbackAsciiByte(value);
+      const EmbeddedOpenDyslexicGlyph &glyph =
+          kEmbeddedOpenDyslexicGlyphs[glyphValue - kEmbeddedOpenDyslexicFirstChar];
+      return {kEmbeddedOpenDyslexicBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+              glyph.xAdvance, kEmbeddedOpenDyslexicHeight};
+    }
+    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
+      const uint8_t glyphValue =
+          (value >= kEmbeddedAtkinsonFirstChar && value <= kEmbeddedAtkinsonLastChar)
+              ? value
+              : LatinText::fallbackAsciiByte(value);
+      const EmbeddedAtkinsonGlyph &glyph =
+          kEmbeddedAtkinsonGlyphs[glyphValue - kEmbeddedAtkinsonFirstChar];
+      return {kEmbeddedAtkinsonBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+              glyph.xAdvance, kEmbeddedAtkinsonHeight};
+    }
     case DisplayManager::ReaderTypeface::Standard:
     default:
       return serifGlyphForByte(value);
   }
 }
 
-ReaderGlyph glyph70For(char c) {
+ReaderGlyph glyphFor(char c) { return glyphFor(c, currentReaderTypeface()); }
+
+ReaderGlyph glyph70For(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
 
-  switch (currentReaderTypeface()) {
-    case DisplayManager::ReaderTypeface::OpenDyslexic:
-      if (value >= kEmbeddedOpenDyslexic70FirstChar && value <= kEmbeddedOpenDyslexic70LastChar) {
-        const EmbeddedOpenDyslexic70Glyph &glyph =
-            kEmbeddedOpenDyslexic70Glyphs[value - kEmbeddedOpenDyslexic70FirstChar];
-        return {kEmbeddedOpenDyslexic70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-                glyph.xAdvance, kEmbeddedOpenDyslexic70Height};
-      }
-      return serif70GlyphForByte(value);
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
-      if (value >= kEmbeddedAtkinson70FirstChar && value <= kEmbeddedAtkinson70LastChar) {
-        const EmbeddedAtkinson70Glyph &glyph =
-            kEmbeddedAtkinson70Glyphs[value - kEmbeddedAtkinson70FirstChar];
-        return {kEmbeddedAtkinson70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
-                glyph.xAdvance, kEmbeddedAtkinson70Height};
-      }
-      return serif70GlyphForByte(value);
+  switch (typeface) {
+    case DisplayManager::ReaderTypeface::OpenDyslexic: {
+      const uint8_t glyphValue =
+          (value >= kEmbeddedOpenDyslexic70FirstChar && value <= kEmbeddedOpenDyslexic70LastChar)
+              ? value
+              : LatinText::fallbackAsciiByte(value);
+      const EmbeddedOpenDyslexic70Glyph &glyph =
+          kEmbeddedOpenDyslexic70Glyphs[glyphValue - kEmbeddedOpenDyslexic70FirstChar];
+      return {kEmbeddedOpenDyslexic70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+              glyph.xAdvance, kEmbeddedOpenDyslexic70Height};
+    }
+    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
+      const uint8_t glyphValue =
+          (value >= kEmbeddedAtkinson70FirstChar && value <= kEmbeddedAtkinson70LastChar)
+              ? value
+              : LatinText::fallbackAsciiByte(value);
+      const EmbeddedAtkinson70Glyph &glyph =
+          kEmbeddedAtkinson70Glyphs[glyphValue - kEmbeddedAtkinson70FirstChar];
+      return {kEmbeddedAtkinson70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
+              glyph.xAdvance, kEmbeddedAtkinson70Height};
+    }
     case DisplayManager::ReaderTypeface::Standard:
     default:
       return serif70GlyphForByte(value);
   }
 }
+
+ReaderGlyph glyph70For(char c) { return glyph70For(c, currentReaderTypeface()); }
 
 const uint8_t *tinyRowsFor(char c) {
-  if (c >= 'a' && c <= 'z') {
-    c = static_cast<char>(c - 'a' + 'A');
-  }
-
-  for (const TinyGlyph &glyph : kTinyGlyphs) {
-    if (glyph.c == c) {
-      return glyph.rows;
+  uint8_t value = LatinText::byteValue(c);
+  for (int pass = 0; pass < 2; ++pass) {
+    char lookup = static_cast<char>(value);
+    if (lookup >= 'a' && lookup <= 'z') {
+      lookup = static_cast<char>(lookup - 'a' + 'A');
     }
+
+    for (const TinyGlyph &glyph : kTinyGlyphs) {
+      if (glyph.c == lookup) {
+        return glyph.rows;
+      }
+    }
+
+    const uint8_t fallback = LatinText::fallbackAsciiByte(value);
+    if (fallback == value) {
+      break;
+    }
+    value = fallback;
   }
 
   for (const TinyGlyph &glyph : kTinyGlyphs) {
-    if (glyph.c == ' ') {
+    if (glyph.c == '?') {
       return glyph.rows;
     }
   }
@@ -354,11 +388,6 @@ uint16_t panelColor(uint16_t rgb565) {
 }
 
 bool isWordCharacter(char c) { return LatinText::isWordCharacter(LatinText::byteValue(c)); }
-
-uint8_t tinyFallbackScalePercent(int scale) {
-  const int scaled = std::max(1, scale) * 12;
-  return static_cast<uint8_t>(std::max(10, std::min(60, scaled)));
-}
 
 int scaledAdvance(int value, int divisor) {
   divisor = std::max(1, divisor);
@@ -476,9 +505,10 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
+  const DisplayManager::ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
 
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(word[i]);
+    const ReaderGlyph glyph = glyphFor(word[i], typeface);
     const int xOffset = scaledSignedAdvance(glyph.xOffset, divisor);
     const int width = glyph.width == 0 ? 0 : scaledAdvance(glyph.width, divisor);
     const int advance = scaledAdvance(glyph.xAdvance, divisor);
@@ -491,7 +521,7 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
 
     int tracked = trackedAdvanceScaled(glyph.xAdvance, divisor, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           word[i], word[i + 1], xOffset, width, tracked,
           scaledSignedAdvance(nextGlyph.xOffset, divisor), scaledDesiredGap(divisor));
@@ -511,9 +541,10 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
+  const DisplayManager::ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
 
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(word[i]);
+    const ReaderGlyph glyph = glyphFor(word[i], typeface);
     const int xOffset = scaledSignedPercent(glyph.xOffset, scalePercent);
     const int width = glyph.width == 0 ? 0 : scaledPercentDimension(glyph.width, scalePercent);
     const int advance = scaledPercentDimension(glyph.xAdvance, scalePercent);
@@ -526,7 +557,7 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
 
     int tracked = trackedAdvanceScaledPercent(glyph.xAdvance, scalePercent, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           word[i], word[i + 1], xOffset, width, tracked,
           scaledSignedPercent(nextGlyph.xOffset, scalePercent),
@@ -546,9 +577,10 @@ TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
+  const DisplayManager::ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
 
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyph70For(word[i]);
+    const ReaderGlyph glyph = glyph70For(word[i], typeface);
     const int left = cursorX + glyph.xOffset;
     const int width = glyph.width;
     const int advance = glyph.xAdvance;
@@ -560,7 +592,7 @@ TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
 
     int tracked = trackedAdvance(advance, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyph70For(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyph70For(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(word[i], word[i + 1], glyph.xOffset, width, tracked,
                                           nextGlyph.xOffset,
                                           regularDesiredGap());
@@ -965,7 +997,7 @@ uint16_t DisplayManager::blendOverBackground(uint16_t rgb565, uint8_t alpha) con
 int DisplayManager::chooseTextScale(const String &word) const {
   const int usableWidth = std::max(1, measureTextWidth(word));
   const int maxScaleX = kDisplayWidth / usableWidth;
-  const int maxScaleY = kDisplayHeight / baseGlyphHeight();
+  const int maxScaleY = kDisplayHeight / baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
   const int maxScale = std::min(kMaxTextScale, std::min(maxScaleX, maxScaleY));
   return std::max(1, maxScale);
 }
@@ -990,9 +1022,6 @@ int DisplayManager::measureTinyTextWidth(const String &text, int scale) const {
   if (text.isEmpty()) {
     return 0;
   }
-  if (LatinText::hasExtendedBytes(text)) {
-    return measureSerifTextWidthScaled(text, tinyFallbackScalePercent(scale));
-  }
   return static_cast<int>(text.length()) * (kTinyGlyphWidth + kTinyGlyphSpacing) * scale -
          kTinyGlyphSpacing * scale;
 }
@@ -1007,7 +1036,9 @@ String DisplayManager::fitSerifText(const String &text, int maxWidth, int diviso
   while (!fitted.isEmpty() && measureSerifTextWidth(fitted + ellipsis, divisor) > maxWidth) {
     fitted.remove(fitted.length() - 1);
   }
-  fitted.trim();
+  while (!fitted.isEmpty() && fitted[fitted.length() - 1] == ' ') {
+    fitted.remove(fitted.length() - 1, 1);
+  }
   return fitted.isEmpty() ? ellipsis : fitted + ellipsis;
 }
 
@@ -1021,12 +1052,18 @@ String DisplayManager::fitTinyText(const String &text, int maxWidth, int scale) 
   while (!fitted.isEmpty() && measureTinyTextWidth(fitted + ellipsis, scale) > maxWidth) {
     fitted.remove(fitted.length() - 1);
   }
-  fitted.trim();
+  while (!fitted.isEmpty() && fitted[fitted.length() - 1] == ' ') {
+    fitted.remove(fitted.length() - 1, 1);
+  }
   return fitted.isEmpty() ? ellipsis : fitted + ellipsis;
 }
 
 void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color) {
-  const ReaderGlyph glyph = glyphFor(c);
+  drawGlyph(x, y, c, color, currentReaderTypeface());
+}
+
+void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color, ReaderTypeface typeface) {
+  const ReaderGlyph glyph = glyphFor(c, typeface);
   if (glyph.width == 0) {
     return;
   }
@@ -1055,8 +1092,13 @@ void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color) {
 }
 
 void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, int divisor) {
+  drawSerifGlyphScaled(x, y, c, color, divisor, currentReaderTypeface());
+}
+
+void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, int divisor,
+                                          ReaderTypeface typeface) {
   divisor = std::max(1, divisor);
-  const ReaderGlyph glyph = glyphFor(c);
+  const ReaderGlyph glyph = glyphFor(c, typeface);
   if (glyph.width == 0) {
     return;
   }
@@ -1103,7 +1145,11 @@ void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, 
 }
 
 void DisplayManager::drawSerif70Glyph(int x, int y, char c, uint16_t color) {
-  const ReaderGlyph glyph = glyph70For(c);
+  drawSerif70Glyph(x, y, c, color, currentReaderTypeface());
+}
+
+void DisplayManager::drawSerif70Glyph(int x, int y, char c, uint16_t color, ReaderTypeface typeface) {
+  const ReaderGlyph glyph = glyph70For(c, typeface);
   if (glyph.width == 0) {
     return;
   }
@@ -1133,12 +1179,18 @@ void DisplayManager::drawSerif70Glyph(int x, int y, char c, uint16_t color) {
 
 void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color,
                                                  uint8_t scalePercent) {
+  drawSerifGlyphScaledPercent(x, y, c, color, scalePercent, currentReaderTypeface());
+}
+
+void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color,
+                                                 uint8_t scalePercent,
+                                                 ReaderTypeface typeface) {
   if (scalePercent >= 100) {
-    drawGlyph(x, y, c, color);
+    drawGlyph(x, y, c, color, typeface);
     return;
   }
 
-  const ReaderGlyph glyph = glyphFor(c);
+  const ReaderGlyph glyph = glyphFor(c, typeface);
   if (glyph.width == 0) {
     return;
   }
@@ -1205,14 +1257,15 @@ void DisplayManager::drawSerifTextAt(const String &text, int x, int y, uint16_t 
                                      int divisor) {
   divisor = std::max(1, divisor);
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(text[i]);
+    const ReaderGlyph glyph = glyphFor(text[i], typeface);
     const int xOffset = scaledSignedAdvance(glyph.xOffset, divisor);
     const int width = glyph.width == 0 ? 0 : scaledAdvance(glyph.width, divisor);
-    drawSerifGlyphScaled(cursorX + xOffset, y, text[i], color, divisor);
+    drawSerifGlyphScaled(cursorX + xOffset, y, text[i], color, divisor, typeface);
     int tracked = trackedAdvanceScaled(glyph.xAdvance, divisor, i, text.length());
     if (i + 1 < text.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(text[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(text[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           text[i], text[i + 1], xOffset, width, tracked,
           scaledSignedAdvance(nextGlyph.xOffset, divisor), scaledDesiredGap(divisor));
@@ -1223,12 +1276,13 @@ void DisplayManager::drawSerifTextAt(const String &text, int x, int y, uint16_t 
 
 void DisplayManager::drawSerif70TextAt(const String &text, int x, int y, uint16_t color) {
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
-    const ReaderGlyph glyph = glyph70For(text[i]);
-    drawSerif70Glyph(cursorX + glyph.xOffset, y, text[i], color);
+    const ReaderGlyph glyph = glyph70For(text[i], typeface);
+    drawSerif70Glyph(cursorX + glyph.xOffset, y, text[i], color, typeface);
     int tracked = trackedAdvance(glyph.xAdvance, i, text.length());
     if (i + 1 < text.length()) {
-      const ReaderGlyph nextGlyph = glyph70For(text[i + 1]);
+      const ReaderGlyph nextGlyph = glyph70For(text[i + 1], typeface);
       tracked -= opticalKerningAdjustment(text[i], text[i + 1], glyph.xOffset, glyph.width, tracked,
                                           nextGlyph.xOffset, regularDesiredGap());
     }
@@ -1239,15 +1293,16 @@ void DisplayManager::drawSerif70TextAt(const String &text, int x, int y, uint16_
 void DisplayManager::drawSerifTextScaledAt(const String &text, int x, int y, uint16_t color,
                                            uint8_t scalePercent) {
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(text[i]);
+    const ReaderGlyph glyph = glyphFor(text[i], typeface);
     const int xOffset = scaledSignedPercent(glyph.xOffset, scalePercent);
     const int width =
         glyph.width == 0 ? 0 : scaledPercentDimension(glyph.width, scalePercent);
-    drawSerifGlyphScaledPercent(cursorX + xOffset, y, text[i], color, scalePercent);
+    drawSerifGlyphScaledPercent(cursorX + xOffset, y, text[i], color, scalePercent, typeface);
     int tracked = trackedAdvanceScaledPercent(glyph.xAdvance, scalePercent, i, text.length());
     if (i + 1 < text.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(text[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(text[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           text[i], text[i + 1], xOffset, width, tracked,
           scaledSignedPercent(nextGlyph.xOffset, scalePercent),
@@ -1286,11 +1341,6 @@ void DisplayManager::drawTinyGlyph(int x, int y, char c, uint16_t color, int sca
 }
 
 void DisplayManager::drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale) {
-  if (LatinText::hasExtendedBytes(text)) {
-    drawSerifTextScaledAt(text, x, y, color, tinyFallbackScalePercent(scale));
-    return;
-  }
-
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     drawTinyGlyph(cursorX, y, text[i], color, scale);
@@ -1349,12 +1399,13 @@ void DisplayManager::drawRsvpAnchorGuide(int anchorX, int textY, int textHeight)
 
 void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color) {
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(word[i]);
-    drawGlyph(cursorX + glyph.xOffset, y, word[i], color);
+    const ReaderGlyph glyph = glyphFor(word[i], typeface);
+    drawGlyph(cursorX + glyph.xOffset, y, word[i], color, typeface);
     int tracked = trackedAdvance(glyph.xAdvance, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(word[i], word[i + 1], glyph.xOffset, glyph.width, tracked,
                                           nextGlyph.xOffset, regularDesiredGap());
     }
@@ -1367,16 +1418,17 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
   divisor = std::max(1, divisor);
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(word[i]);
+    const ReaderGlyph glyph = glyphFor(word[i], typeface);
     const uint16_t color =
         (highlightFocus && static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
     const int xOffset = scaledSignedAdvance(glyph.xOffset, divisor);
     const int width = glyph.width == 0 ? 0 : scaledAdvance(glyph.width, divisor);
-    drawSerifGlyphScaled(cursorX + xOffset, y, word[i], color, divisor);
+    drawSerifGlyphScaled(cursorX + xOffset, y, word[i], color, divisor, typeface);
     int tracked = trackedAdvanceScaled(glyph.xAdvance, divisor, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           word[i], word[i + 1], xOffset, width, tracked,
           scaledSignedAdvance(nextGlyph.xOffset, divisor), scaledDesiredGap(divisor));
@@ -1388,14 +1440,15 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
 void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focusIndex) {
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyph70For(word[i]);
+    const ReaderGlyph glyph = glyph70For(word[i], typeface);
     const uint16_t color =
         (highlightFocus && static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
-    drawSerif70Glyph(cursorX + glyph.xOffset, y, word[i], color);
+    drawSerif70Glyph(cursorX + glyph.xOffset, y, word[i], color, typeface);
     int tracked = trackedAdvance(glyph.xAdvance, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyph70For(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyph70For(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(word[i], word[i + 1], glyph.xOffset, glyph.width, tracked,
                                           nextGlyph.xOffset, regularDesiredGap());
     }
@@ -1407,17 +1460,18 @@ void DisplayManager::drawRsvpWordScaledPercentAt(const String &word, int x, int 
                                                  uint8_t scalePercent) {
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
+  const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
-    const ReaderGlyph glyph = glyphFor(word[i]);
+    const ReaderGlyph glyph = glyphFor(word[i], typeface);
     const uint16_t color =
         (highlightFocus && static_cast<int>(i) == focusIndex) ? focusColor() : wordColor();
     const int xOffset = scaledSignedPercent(glyph.xOffset, scalePercent);
     const int width =
         glyph.width == 0 ? 0 : scaledPercentDimension(glyph.width, scalePercent);
-    drawSerifGlyphScaledPercent(cursorX + xOffset, y, word[i], color, scalePercent);
+    drawSerifGlyphScaledPercent(cursorX + xOffset, y, word[i], color, scalePercent, typeface);
     int tracked = trackedAdvanceScaledPercent(glyph.xAdvance, scalePercent, i, word.length());
     if (i + 1 < word.length()) {
-      const ReaderGlyph nextGlyph = glyphFor(word[i + 1]);
+      const ReaderGlyph nextGlyph = glyphFor(word[i + 1], typeface);
       tracked -= opticalKerningAdjustment(
           word[i], word[i + 1], xOffset, width, tracked,
           scaledSignedPercent(nextGlyph.xOffset, scalePercent),
@@ -1495,7 +1549,7 @@ void DisplayManager::renderCenteredWord(const String &word, uint16_t color) {
   const int scale = chooseTextScale(normalized);
   const int virtualWidth = (kDisplayWidth + scale - 1) / scale;
   const int virtualHeight = (kDisplayHeight + scale - 1) / scale;
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(normalized));
 
   clearVirtualBuffer(virtualWidth, virtualHeight);
   const int y = std::max(0, (virtualHeight - glyphHeight) / 2);
@@ -1520,7 +1574,7 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
   const int y = std::max(0, (virtualHeight - glyphHeight) / 2);
   const int focusIndex = findFocusLetterIndex(word);
   const int x = rsvpStartX(word, focusIndex, virtualWidth, 1, false);
@@ -1553,7 +1607,7 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
   const int wordY = std::max(0, (virtualHeight - glyphHeight) / 2);
   const int wpmY =
       std::max(0, virtualHeight - kTinyGlyphHeight * kTinyScale - kWpmFeedbackBottomMargin - 24);
@@ -1591,7 +1645,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     const int scale = 1;
     const int virtualWidth = kDisplayWidth;
     const int virtualHeight = kDisplayHeight;
-    const int mediumHeight = mediumGlyphHeight();
+    const int mediumHeight = mediumGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
     const int textY = std::max(0, (virtualHeight - mediumHeight) / 2);
     const int focusIndex = findFocusLetterIndex(word);
     const int currentX = rsvpStartX70(word, focusIndex, virtualWidth, false);
@@ -1626,7 +1680,8 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int textHeight = scaledPercentDimension(baseGlyphHeight(), style.scalePercent);
+  const int textHeight = scaledPercentDimension(
+      baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word)), style.scalePercent);
   const int textY = std::max(0, (virtualHeight - textHeight) / 2);
   const int focusIndex = findFocusLetterIndex(word);
   const int currentX =
@@ -1696,7 +1751,7 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
                        kTinyScale);
 
   if (fontSizeLevel == 1) {
-    const int textHeight = mediumGlyphHeight();
+    const int textHeight = mediumGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
     int textY = (textTop + textBottom - textHeight) / 2;
     textY = std::max(textTop, std::min(textY, textBottom - textHeight));
     const int focusIndex = findFocusLetterIndex(word);
@@ -1721,7 +1776,8 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
     }
   } else {
     const ReaderTextStyle style = readerTextStyle(fontSizeLevel);
-    const int textHeight = scaledPercentDimension(baseGlyphHeight(), style.scalePercent);
+    const int textHeight = scaledPercentDimension(
+        baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word)), style.scalePercent);
     int textY = (textTop + textBottom - textHeight) / 2;
     textY = std::max(textTop, std::min(textY, textBottom - textHeight));
     const int focusIndex = findFocusLetterIndex(word);
@@ -1780,7 +1836,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     const int scale = 1;
     const int virtualWidth = kDisplayWidth;
     const int virtualHeight = kDisplayHeight;
-    const int mediumHeight = mediumGlyphHeight();
+    const int mediumHeight = mediumGlyphHeightForTypeface(effectiveReaderTypefaceForText(word));
     const int textY = std::max(0, (virtualHeight - mediumHeight) / 2);
     const int wpmY =
         std::max(0, virtualHeight - kTinyGlyphHeight * kTinyScale - kWpmFeedbackBottomMargin - 24);
@@ -1818,7 +1874,8 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int textHeight = scaledPercentDimension(baseGlyphHeight(), style.scalePercent);
+  const int textHeight = scaledPercentDimension(
+      baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(word)), style.scalePercent);
   const int textY = std::max(0, (virtualHeight - textHeight) / 2);
   const int wpmY =
       std::max(0, virtualHeight - kTinyGlyphHeight * kTinyScale - kWpmFeedbackBottomMargin - 24);
@@ -1892,8 +1949,10 @@ void DisplayManager::renderContextView(const std::vector<ContextWord> &words,
   const int virtualHeight = kDisplayHeight;
   const int textBottom =
       virtualHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom - 6;
-  const int contextGlyphHeight =
-      std::max(1, (baseGlyphHeight() + kContextSerifDivisor - 1) / kContextSerifDivisor);
+  const ReaderTypeface contextTypeface = currentReaderTypeface();
+  const int contextGlyphHeight = std::max(
+      1, (baseGlyphHeightForTypeface(contextTypeface) + kContextSerifDivisor - 1) /
+             kContextSerifDivisor);
   const int maxLineWidth = virtualWidth - (kContextMarginX * 2);
   std::vector<ContextLine> lines;
   lines.reserve(16);
@@ -2155,7 +2214,7 @@ void DisplayManager::renderStatus(const String &title, const String &line1, cons
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(title));
   const int titleY = std::max(0, (virtualHeight - glyphHeight) / 2 - 26);
   const int line1Y = std::min(virtualHeight - kTinyGlyphHeight * kTinyScale,
                               titleY + glyphHeight + 22);
@@ -2191,7 +2250,7 @@ void DisplayManager::renderProgress(const String &title, const String &line1, co
   const int scale = 1;
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
-  const int glyphHeight = baseGlyphHeight();
+  const int glyphHeight = baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(title));
   const int titleY = std::max(0, (virtualHeight - glyphHeight) / 2 - 34);
   const int line1Y = std::min(virtualHeight - kTinyGlyphHeight * kTinyScale,
                               titleY + glyphHeight + 18);

@@ -47,8 +47,6 @@ const BLOCK_TAGS = new Set([
 
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 const SKIP_TAGS = new Set(["head", "math", "nav", "script", "style", "svg"]);
-const TRIMMABLE_EDGE_CHARS = "\"'()[]{}<>";
-
 const ASCII_REPLACEMENTS = {
   "\u00A0": " ",
   "\u1680": " ",
@@ -81,8 +79,14 @@ const ASCII_REPLACEMENTS = {
   "\u201F": '"',
   "\u00AB": '"',
   "\u00BB": '"',
+  "\u2039": "'",
+  "\u203A": "'",
   "\u2033": '"',
   "\u2036": '"',
+  "\u300C": '"',
+  "\u300D": '"',
+  "\u300E": '"',
+  "\u300F": '"',
   "\u2010": "-",
   "\u2011": "-",
   "\u2012": "-",
@@ -95,6 +99,42 @@ const ASCII_REPLACEMENTS = {
   "\u2022": "*",
   "\u00B7": "*",
   "\u2219": "*",
+  "\u207D": "(",
+  "\u208D": "(",
+  "\u2768": "(",
+  "\u276A": "(",
+  "\u207E": ")",
+  "\u208E": ")",
+  "\u2769": ")",
+  "\u276B": ")",
+  "\u2045": "[",
+  "\u2308": "[",
+  "\u230A": "[",
+  "\u3010": "[",
+  "\u3014": "[",
+  "\u3016": "[",
+  "\u3018": "[",
+  "\u301A": "[",
+  "\u2046": "]",
+  "\u2309": "]",
+  "\u230B": "]",
+  "\u3011": "]",
+  "\u3015": "]",
+  "\u3017": "]",
+  "\u3019": "]",
+  "\u301B": "]",
+  "\u2774": "{",
+  "\u2776": "{",
+  "\u2775": "}",
+  "\u2777": "}",
+  "\u2329": "<",
+  "\u27E8": "<",
+  "\u3008": "<",
+  "\u300A": "<",
+  "\u232A": ">",
+  "\u27E9": ">",
+  "\u3009": ">",
+  "\u300B": ">",
   "\u00A9": "(c)",
   "\u00AE": "(r)",
   "\u2122": "TM",
@@ -1377,22 +1417,7 @@ function iterCleanWords(text, mode) {
 
   return cleaned
     .split(/\s+/)
-    .map((token) => trimEdgeCharacters(token))
     .filter((token) => token && /[\p{L}\p{N}]/u.test(token));
-}
-
-function trimEdgeCharacters(token) {
-  let start = 0;
-  let end = token.length;
-
-  while (start < end && TRIMMABLE_EDGE_CHARS.includes(token[start])) {
-    start += 1;
-  }
-  while (end > start && TRIMMABLE_EDGE_CHARS.includes(token[end - 1])) {
-    end -= 1;
-  }
-
-  return token.slice(start, end);
 }
 
 function cleanText(text, mode) {
@@ -1401,6 +1426,9 @@ function cleanText(text, mode) {
 
   if (mode === "ascii") {
     value = Array.from(value, (character) => ASCII_REPLACEMENTS[character] ?? character).join("");
+    value = value.replace(/[\uFF01-\uFF5E]/g, (character) =>
+      String.fromCharCode(character.charCodeAt(0) - 0xfee0),
+    );
     value = value.normalize("NFKD").replace(COMBINING_MARKS_RE, "");
     value = value.replace(/[^\x20-\x7E]/g, "");
   } else {

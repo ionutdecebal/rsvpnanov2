@@ -1,14 +1,15 @@
 # RSVP Nano
 
-RSVP Nano is an open-source ESP32-S3 reading device for showing text one word at a time with RSVP (Rapid Serial Visual Presentation). The firmware is built around stable anchor-letter rendering, readable typography, tunable pacing, SD card storage, and local EPUB conversion.
+RSVP Nano is an open-source ESP32-S3 reading device for showing text one word at a time with RSVP (Rapid Serial Visual Presentation). The firmware is built around stable anchor-letter rendering, readable typography, tunable pacing, SD card storage, and a web-first book conversion workflow.
 
 ## Highlights
 
 - One-word RSVP reader with stable anchor alignment.
 - Adjustable typeface, font size, typography, anchor guides, pacing, and phantom words.
+- Menu language selection for English, Spanish, French, German, Romanian, and Polish.
 - Chapter and paragraph-aware navigation.
 - SD card library under `/books`.
-- Local on-device EPUB conversion to cached `.rsvp` files.
+- Web-first book conversion and SD-card library sync from the browser flasher.
 - USB mass-storage mode for copying books to the SD card.
 - Browser-based firmware installation plus in-browser library conversion, sidecar cleanup, and SD-card sync.
 
@@ -27,6 +28,8 @@ It also includes a browser-side Library Workspace for importing supported books,
 into `.rsvp`, downloading a `.zip` of the results, cleaning interrupted sidecar files, and syncing
 the converted outputs back into the SD card's `/books` folder.
 
+On the device, you can switch the menu language in `Settings -> Display -> Language`.
+
 The browser workflow currently accepts:
 
 - `.epub`
@@ -36,6 +39,7 @@ The browser workflow currently accepts:
 
 The browser page automatically writes `.rsvp` output that preserves common accented, Baltic,
 Sami, and other extended-Latin letters while staying compatible with the current firmware.
+It is currently the best-supported conversion path and the recommended way to prepare books.
 
 ### Add Books
 
@@ -50,17 +54,24 @@ If you want to manage files manually, create a `books` folder at the root of the
   another-book.rsvp
 ```
 
-The device library scans `/books` for `.rsvp`, `.txt`, and `.epub` files.
+The device library scans `/books` for `.rsvp`, `.txt`, and `.epub` files, but the recommended
+workflow is to put browser-converted `.rsvp` files there whenever possible.
 
 Current text support is best for ASCII plus a curated set of accented and extended-Latin letters
 used in many European languages. That includes the usual Germanic and Nordic letters plus common
 extras such as `OE`/`oe` ligatures, Polish `L`-slash style letters, Romanian comma-accent letters,
-several Central European and Turkish forms, and the Baltic/Sami letters used in Latvian,
-Lithuanian, and Sami text. More complex scripts still need additional renderer and font work.
+several Central European and Turkish forms, the Czech and Hungarian letters used outside Latin-1,
+and the Baltic/Sami letters used in Latvian, Lithuanian, and Sami text. Common book punctuation
+such as curly quotes, guillemets, and bracket variants is normalized into readable ASCII wrappers.
+The Standard serif reader font renders that wider Latin set directly. In the other reader fonts
+and in the tiny UI font, unsupported letters currently fall back to the closest plain ASCII letter
+in the selected font instead of switching fonts.
+More complex scripts still need additional renderer and font work.
 
 The firmware prioritizes `.rsvp` files. If a matching `.rsvp` file does not exist yet, an EPUB
-appears in the library and is converted locally the first time it is opened. The converted `.rsvp`
-file is then reused on future launches.
+can still be converted locally the first time it is opened, and the converted `.rsvp` file is then
+reused on future launches. That on-device path is best treated as a fallback; the browser converter
+currently has the best compatibility and library-management flow.
 
 If a conversion is interrupted, you may see sidecar files such as:
 
@@ -117,14 +128,15 @@ pio test -e native_test
 
 Tests live in `test/test_pacing/` and cover word duration calculation (length tiers, syllable complexity, punctuation pauses, abbreviation detection, pacing scale), WPM clamping, and seek/scrub behaviour. A minimal `Arduino.h` shim in `test/support/` lets `ReadingLoop.cpp` compile on the host without the ESP32 SDK.
 
-## Optional Desktop Book Conversion
+## Desktop Converter Fallback
 
-You do not need the desktop converter for the normal workflow anymore. The browser flasher page can
-already convert supported books locally and sync them into the SD card.
+You do not need the desktop converter for the normal workflow. The browser flasher page is the
+recommended conversion path and can already convert supported books locally and sync them into the
+SD card.
 
 The desktop helper is still available if you want an offline, script-driven, or batch-conversion
-path on a computer. To use it, copy the helper files from `tools/sd_card_converter` to the SD card
-root and run the launcher for your platform:
+fallback on a computer. To use it, copy the helper files from `tools/sd_card_converter` to the SD
+card root and run the launcher for your platform:
 
 - Windows: `Convert books.bat`
 - macOS: `Convert books.command`

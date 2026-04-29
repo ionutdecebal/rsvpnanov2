@@ -32,6 +32,22 @@ DEFAULT_SYMBOL_PREFIX = "EmbeddedSerif"
 
 # Keep this slot map in sync with src/text/LatinText.h.
 CUSTOM_GLYPH_CODEPOINTS = {
+    0x01: 0x010E,  # Dcaron
+    0x02: 0x010F,  # dcaron
+    0x03: 0x011A,  # Ecaron
+    0x04: 0x011B,  # ecaron
+    0x05: 0x0147,  # Ncaron
+    0x06: 0x0148,  # ncaron
+    0x07: 0x0158,  # Rcaron
+    0x08: 0x0159,  # rcaron
+    0x0E: 0x0164,  # Tcaron
+    0x0F: 0x0165,  # tcaron
+    0x10: 0x016E,  # Uring
+    0x11: 0x016F,  # uring
+    0x12: 0x0150,  # Odblac
+    0x13: 0x0151,  # odblac
+    0x14: 0x0170,  # Udblac
+    0x15: 0x0171,  # udblac
     0x80: 0x0152,  # OE
     0x81: 0x0153,  # oe
     0x82: 0x0141,  # Lslash
@@ -99,6 +115,22 @@ CUSTOM_GLYPH_CODEPOINTS = {
 }
 
 CUSTOM_GLYPH_NAMES = {
+    0x010E: "Dcaron",
+    0x010F: "dcaron",
+    0x011A: "Ecaron",
+    0x011B: "ecaron",
+    0x0147: "Ncaron",
+    0x0148: "ncaron",
+    0x0158: "Rcaron",
+    0x0159: "rcaron",
+    0x0164: "Tcaron",
+    0x0165: "tcaron",
+    0x016E: "Uring",
+    0x016F: "uring",
+    0x0150: "Odblac",
+    0x0151: "odblac",
+    0x0170: "Udblac",
+    0x0171: "udblac",
     0x0152: "OE",
     0x0153: "oe",
     0x0141: "Lslash",

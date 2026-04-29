@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "app/AppState.h"
+#include "app/Localization.h"
 #include "display/DisplayManager.h"
 #include "input/ButtonHandler.h"
 #include "input/TouchHandler.h"
@@ -61,6 +62,7 @@ class App {
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness();
   void cycleThemeMode(uint32_t nowMs);
+  void cycleUiLanguage(uint32_t nowMs);
   void togglePhantomWords(uint32_t nowMs);
   void cycleReaderFontSize(uint32_t nowMs);
   void applyDisplayPreferences(uint32_t nowMs, bool rerender = true);
@@ -85,10 +87,12 @@ class App {
   String themeModeLabel() const;
   String phantomWordsLabel() const;
   String focusHighlightLabel() const;
+  String uiLanguageLabel() const;
   String readerFontSizeLabel() const;
   String readerTypefaceLabel() const;
   String typographyTuningLabel() const;
   String typographyTuningValueLabel() const;
+  String uiText(UiText key) const;
   void openBookPicker();
   void selectBookPickerItem(uint32_t nowMs);
   void openChapterPicker();
@@ -201,5 +205,6 @@ class App {
   bool phantomWordsEnabled_ = true;
   bool darkMode_ = true;
   bool nightMode_ = false;
+  UiLanguage uiLanguage_ = UiLanguage::English;
   DisplayManager::TypographyConfig typographyConfig_;
 };

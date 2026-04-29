@@ -90,9 +90,15 @@ class DisplayManager {
   String fitSerifText(const String &text, int maxWidth, int divisor) const;
   String fitTinyText(const String &text, int maxWidth, int scale) const;
   void drawGlyph(int x, int y, char c, uint16_t color);
+  void drawGlyph(int x, int y, char c, uint16_t color, ReaderTypeface typeface);
   void drawSerifGlyphScaled(int x, int y, char c, uint16_t color, int divisor);
+  void drawSerifGlyphScaled(int x, int y, char c, uint16_t color, int divisor,
+                            ReaderTypeface typeface);
   void drawSerif70Glyph(int x, int y, char c, uint16_t color);
+  void drawSerif70Glyph(int x, int y, char c, uint16_t color, ReaderTypeface typeface);
   void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent);
+  void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent,
+                                   ReaderTypeface typeface);
   void fillVirtualRect(int x, int y, int width, int height, uint16_t color);
   void drawSerifTextAt(const String &text, int x, int y, uint16_t color, int divisor);
   void drawSerif70TextAt(const String &text, int x, int y, uint16_t color);

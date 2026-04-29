@@ -337,6 +337,112 @@ char entityCodepointByte(uint32_t codepoint) {
   return ' ';
 }
 
+char entityPunctuationChar(uint32_t codepoint) {
+  if (codepoint >= 0xFF01 && codepoint <= 0xFF5E) {
+    return static_cast<char>(codepoint - 0xFEE0);
+  }
+
+  switch (codepoint) {
+    case 0x00A0:
+      return ' ';
+    case 0x00AB:
+    case 0x00BB:
+    case 0x201C:
+    case 0x201D:
+    case 0x201E:
+    case 0x201F:
+    case 0x2033:
+    case 0x2036:
+    case 0x300C:
+    case 0x300D:
+    case 0x300E:
+    case 0x300F:
+      return '"';
+    case 0x2018:
+    case 0x2019:
+    case 0x201A:
+    case 0x201B:
+    case 0x2032:
+    case 0x2035:
+    case 0x2039:
+    case 0x203A:
+      return '\'';
+    case 0x2010:
+    case 0x2011:
+    case 0x2012:
+    case 0x2013:
+    case 0x2014:
+    case 0x2015:
+    case 0x2043:
+    case 0x2212:
+      return '-';
+    case 0x2022:
+    case 0x00B7:
+    case 0x2219:
+      return '*';
+    case 0x2026:
+      return '.';
+    case 0x207D:
+    case 0x208D:
+    case 0x2768:
+    case 0x276A:
+      return '(';
+    case 0x207E:
+    case 0x208E:
+    case 0x2769:
+    case 0x276B:
+      return ')';
+    case 0x2045:
+    case 0x2308:
+    case 0x230A:
+    case 0x3010:
+    case 0x3014:
+    case 0x3016:
+    case 0x3018:
+    case 0x301A:
+      return '[';
+    case 0x2046:
+    case 0x2309:
+    case 0x230B:
+    case 0x3011:
+    case 0x3015:
+    case 0x3017:
+    case 0x3019:
+    case 0x301B:
+      return ']';
+    case 0x2774:
+    case 0x2776:
+      return '{';
+    case 0x2775:
+    case 0x2777:
+      return '}';
+    case 0x2329:
+    case 0x27E8:
+    case 0x3008:
+    case 0x300A:
+      return '<';
+    case 0x232A:
+    case 0x27E9:
+    case 0x3009:
+    case 0x300B:
+      return '>';
+    case 0xFF0C:
+      return ',';
+    case 0xFF0E:
+      return '.';
+    case 0xFF1A:
+      return ':';
+    case 0xFF1B:
+      return ';';
+    case 0xFF01:
+      return '!';
+    case 0xFF1F:
+      return '?';
+    default:
+      return '\0';
+  }
+}
+
 char decodedEntityChar(const String &entity) {
   if (entity == "amp") {
     return '&';
@@ -356,11 +462,47 @@ char decodedEntityChar(const String &entity) {
   if (entity == "nbsp") {
     return ' ';
   }
+  if (entity == "ldquo" || entity == "rdquo" || entity == "bdquo") {
+    return '"';
+  }
+  if (entity == "lsquo" || entity == "rsquo" || entity == "sbquo") {
+    return '\'';
+  }
+  if (entity == "laquo" || entity == "raquo") {
+    return '"';
+  }
+  if (entity == "lsaquo" || entity == "rsaquo") {
+    return '\'';
+  }
+  if (entity == "lpar") {
+    return '(';
+  }
+  if (entity == "rpar") {
+    return ')';
+  }
+  if (entity == "lbrack") {
+    return '[';
+  }
+  if (entity == "rbrack") {
+    return ']';
+  }
+  if (entity == "lcub") {
+    return '{';
+  }
+  if (entity == "rcub") {
+    return '}';
+  }
   if (entity == "ndash" || entity == "mdash") {
+    return '-';
+  }
+  if (entity == "hyphen" || entity == "minus") {
     return '-';
   }
   if (entity == "hellip") {
     return '.';
+  }
+  if (entity == "middot" || entity == "bull") {
+    return '*';
   }
   if (entity == "AElig") {
     return static_cast<char>(0xC6);
@@ -424,6 +566,54 @@ char decodedEntityChar(const String &entity) {
   }
   if (entity == "szlig") {
     return static_cast<char>(0xDF);
+  }
+  if (entity == "Dcaron") {
+    return static_cast<char>(0x01);
+  }
+  if (entity == "dcaron") {
+    return static_cast<char>(0x02);
+  }
+  if (entity == "Ecaron") {
+    return static_cast<char>(0x03);
+  }
+  if (entity == "ecaron") {
+    return static_cast<char>(0x04);
+  }
+  if (entity == "Ncaron") {
+    return static_cast<char>(0x05);
+  }
+  if (entity == "ncaron") {
+    return static_cast<char>(0x06);
+  }
+  if (entity == "Rcaron") {
+    return static_cast<char>(0x07);
+  }
+  if (entity == "rcaron") {
+    return static_cast<char>(0x08);
+  }
+  if (entity == "Tcaron") {
+    return static_cast<char>(0x0E);
+  }
+  if (entity == "tcaron") {
+    return static_cast<char>(0x0F);
+  }
+  if (entity == "Uring") {
+    return static_cast<char>(0x10);
+  }
+  if (entity == "uring") {
+    return static_cast<char>(0x11);
+  }
+  if (entity == "Odblac") {
+    return static_cast<char>(0x12);
+  }
+  if (entity == "odblac") {
+    return static_cast<char>(0x13);
+  }
+  if (entity == "Udblac") {
+    return static_cast<char>(0x14);
+  }
+  if (entity == "udblac") {
+    return static_cast<char>(0x15);
   }
   if (entity == "OElig") {
     return static_cast<char>(0x80);
@@ -551,17 +741,9 @@ char decodedEntityChar(const String &entity) {
     if (mapped != ' ') {
       return mapped;
     }
-    if (value == 0x2018 || value == 0x2019) {
-      return '\'';
-    }
-    if (value == 0x201C || value == 0x201D) {
-      return '"';
-    }
-    if (value == 0x2013 || value == 0x2014) {
-      return '-';
-    }
-    if (value == 0x2026) {
-      return '.';
+    const char punctuation = entityPunctuationChar(value);
+    if (punctuation != '\0') {
+      return punctuation;
     }
   }
 

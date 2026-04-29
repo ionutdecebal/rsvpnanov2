@@ -1,0 +1,55 @@
+@rsvp 1
+@title European Letter Demo
+@author Codex
+@source docs/demo-books/european-letter-demo.rsvp
+@chapter What This Shows
+@para
+This demo book exercises the accented, Baltic, Sami, and extended-Latin letters that the current firmware should now preserve, pace, and render correctly.
+@para
+If the update worked, these chapters should show real letters instead of question marks.
+
+@chapter Quotes And Brackets
+@para
+“Quoted text,” ‘single quotes,’ «guillemets,» and ‹angle quotes› should stay visible.
+@para
+(Parentheses) [brackets] {braces} <angles> should stay wrapped around words.
+@para
+Fullwidth forms like （these）, ［these］, ｛these｝, and ＜these＞ should collapse into readable ASCII wrappers.
+
+@chapter Germanic And Nordic
+@para
+Ärger größer Übermut Straße Fußgänger Mädchen schön kühl.
+@para
+Æsir Øresund Ålesund blåbær smørrebrød Þingvellir þjóðvegur veður.
+@para
+Õun öö ääni jääkülm.
+
+@chapter French And Western European
+@para
+Œuvre cœur sœur garçon français Noël déjà façade maïs.
+
+@chapter Polish Romanian And Turkish
+@para
+Łódź książę Śląsk Żubr Źródło Ćma dźwięk pięć.
+@para
+Țară Știință înțelegere ăsta română înger.
+@para
+İzmir ışık çağdaş öğüt şeker üzüm.
+
+@chapter Baltic
+@para
+Ābele Čiekurs Ēna Ģimene Īlens Ķirbis Ļaudis Ņem Šūpoles Ūdens Žagata.
+@para
+Ąžuolas Ėriukas Įžanga Šaltis Ųkis Ūkas Žingsnis.
+@para
+Pair bank Ą ą Ę ę Ė ė Į į Š š Ų ų Ū ū Ž ž.
+
+@chapter Sami
+@para
+Áigi Čáhci Đálki Ŋuovža Šávza Ŧuorri Žárga.
+@para
+Pair bank Á á Č č Đ đ Ŋ ŋ Š š Ŧ ŧ Ž ž.
+
+@chapter Full Pair Bank
+@para
+Æ æ Œ œ Ø ø Å å Ä ä Ö ö Ü ü Þ þ Ð ð Ł ł Č č Š š Ž ž Ă ă Ș ș Ț ț Ğ ğ Ş ş İ ı Ą ą Ę ę Ć ć Ń ń Ś ś Ź ź Ż ż Ā ā Ē ē Ģ ģ Ī ī Ķ ķ Ļ ļ Ņ ņ Ė ė Į į Ų ų Ū ū Đ đ Ŋ ŋ Ŧ ŧ.

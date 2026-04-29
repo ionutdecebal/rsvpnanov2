@@ -54,17 +54,6 @@ enum MenuItem : size_t {
   MenuItemCount,
 };
 
-constexpr const char *kMenuItems[] = {
-    "Resume",
-    "Chapters",
-    "Library",
-    "Settings",
-#if RSVP_USB_TRANSFER_ENABLED
-    "USB transfer",
-#endif
-    "Power off",
-};
-
 enum SettingsItem : size_t {
   SettingsBack,
   SettingsDisplay,
@@ -101,12 +90,6 @@ enum RestartConfirmItem : size_t {
   RestartConfirmItemCount,
 };
 
-constexpr const char *kRestartConfirmItems[] = {
-    "Are you sure?",
-    "No, keep place",
-    "Yes, restart",
-};
-
 constexpr size_t kRestartConfirmHeaderRows = 1;
 constexpr size_t kSettingsBackIndex = 0;
 constexpr size_t kSettingsHomeDisplayIndex = 1;
@@ -114,6 +97,7 @@ constexpr size_t kSettingsHomeTypographyIndex = 2;
 constexpr size_t kSettingsHomePacingIndex = 3;
 constexpr size_t kSettingsDisplayThemeIndex = 1;
 constexpr size_t kSettingsDisplayBrightnessIndex = 2;
+constexpr size_t kSettingsDisplayLanguageIndex = 3;
 constexpr size_t kSettingsPacingLongWordsIndex = 1;
 constexpr size_t kSettingsPacingComplexityIndex = 2;
 constexpr size_t kSettingsPacingPunctuationIndex = 3;
@@ -129,6 +113,7 @@ constexpr const char *kPrefWpm = "wpm";
 constexpr const char *kPrefBrightness = "bright";
 constexpr const char *kPrefDarkMode = "dark";
 constexpr const char *kPrefNightMode = "night";
+constexpr const char *kPrefUiLanguage = "ui_lang";
 constexpr const char *kPrefPhantomWords = "phantom_on";
 constexpr const char *kPrefReaderFontSize = "font_size";
 constexpr const char *kPrefReaderTypeface = "typeface";
@@ -144,9 +129,7 @@ constexpr const char *kPrefTypographyAnchor = "type_anc";
 constexpr const char *kPrefTypographyGuideWidth = "type_wid";
 constexpr const char *kPrefTypographyGuideGap = "type_gap";
 constexpr const char *kPrefRecentSeq = "seq";
-constexpr const char *kReaderFontSizeLabels[] = {"Large", "Medium", "Small"};
-constexpr size_t kReaderFontSizeCount =
-    sizeof(kReaderFontSizeLabels) / sizeof(kReaderFontSizeLabels[0]);
+constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
 constexpr uint32_t kNoSavedWordIndex = 0xFFFFFFFFUL;
@@ -292,6 +275,9 @@ void App::begin() {
     brightnessLevelIndex_ = kBrightnessLevelCount - 1;
   }
   phantomWordsEnabled_ = preferences_.getBool(kPrefPhantomWords, phantomWordsEnabled_);
+  uiLanguage_ =
+      Localization::sanitizeLanguage(preferences_.getUChar(
+          kPrefUiLanguage, static_cast<uint8_t>(uiLanguage_)));
   readerFontSizeIndex_ = preferences_.getUChar(kPrefReaderFontSize, readerFontSizeIndex_);
   if (readerFontSizeIndex_ >= kReaderFontSizeCount) {
     readerFontSizeIndex_ = 0;
@@ -741,6 +727,33 @@ void App::cycleThemeMode(uint32_t nowMs) {
   applyDisplayPreferences(nowMs);
 }
 
+void App::cycleUiLanguage(uint32_t nowMs) {
+  uiLanguage_ = Localization::nextLanguage(uiLanguage_);
+  preferences_.putUChar(kPrefUiLanguage, static_cast<uint8_t>(uiLanguage_));
+  Serial.printf("[display] language=%s\n", uiLanguageLabel().c_str());
+
+  if (state_ == AppState::Menu) {
+    if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
+        menuScreen_ == MenuScreen::SettingsPacing) {
+      rebuildSettingsMenuItems();
+      renderSettings();
+      return;
+    }
+    renderMenu();
+    return;
+  }
+
+  if (state_ == AppState::Paused || state_ == AppState::Playing) {
+    if (contextViewVisible_) {
+      renderContextPreview();
+    } else if (wpmFeedbackVisible_) {
+      renderWpmFeedback(nowMs);
+    } else {
+      renderReaderWord();
+    }
+  }
+}
+
 void App::togglePhantomWords(uint32_t nowMs) {
   phantomWordsEnabled_ = !phantomWordsEnabled_;
   preferences_.putBool(kPrefPhantomWords, phantomWordsEnabled_);
@@ -1056,10 +1069,45 @@ void App::moveMenuSelection(int direction) {
     Serial.printf("[chapter-picker] selected=%s\n",
                   chapterMenuItems_[chapterPickerSelectedIndex_].c_str());
   } else if (menuScreen_ == MenuScreen::RestartConfirm) {
-    Serial.printf("[restart] selected=%s\n",
-                  kRestartConfirmItems[restartConfirmSelectedIndex_ + kRestartConfirmHeaderRows]);
+    String selectedLabel = uiText(UiText::AreYouSure);
+    switch (restartConfirmSelectedIndex_) {
+      case RestartConfirmNo:
+        selectedLabel = uiText(UiText::NoKeepPlace);
+        break;
+      case RestartConfirmYes:
+        selectedLabel = uiText(UiText::YesRestart);
+        break;
+      default:
+        break;
+    }
+    Serial.printf("[restart] selected=%s\n", selectedLabel.c_str());
   } else {
-    Serial.printf("[menu] selected=%s\n", kMenuItems[menuSelectedIndex_]);
+    String selectedLabel = uiText(UiText::Resume);
+    switch (menuSelectedIndex_) {
+      case MenuResume:
+        selectedLabel = uiText(UiText::Resume);
+        break;
+      case MenuChapters:
+        selectedLabel = uiText(UiText::Chapters);
+        break;
+      case MenuChangeBook:
+        selectedLabel = uiText(UiText::Library);
+        break;
+      case MenuSettings:
+        selectedLabel = uiText(UiText::Settings);
+        break;
+#if RSVP_USB_TRANSFER_ENABLED
+      case MenuUsbTransfer:
+        selectedLabel = uiText(UiText::UsbTransfer);
+        break;
+#endif
+      case MenuPowerOff:
+        selectedLabel = uiText(UiText::PowerOff);
+        break;
+      default:
+        break;
+    }
+    Serial.printf("[menu] selected=%s\n", selectedLabel.c_str());
   }
 }
 
@@ -1164,6 +1212,9 @@ void App::selectSettingsItem(uint32_t nowMs) {
         return;
       case kSettingsDisplayBrightnessIndex:
         cycleBrightness();
+        return;
+      case kSettingsDisplayLanguageIndex:
+        cycleUiLanguage(nowMs);
         return;
       default:
         return;
@@ -1305,20 +1356,25 @@ void App::rebuildSettingsMenuItems() {
   settingsMenuItems_.clear();
   settingsMenuItems_.reserve(SettingsItemCount);
   if (menuScreen_ == MenuScreen::SettingsHome) {
-    settingsMenuItems_.push_back("Back");
-    settingsMenuItems_.push_back("Display");
-    settingsMenuItems_.push_back("Typography tune");
-    settingsMenuItems_.push_back("Word pacing");
+    settingsMenuItems_.push_back(uiText(UiText::Back));
+    settingsMenuItems_.push_back(uiText(UiText::Display));
+    settingsMenuItems_.push_back(uiText(UiText::TypographyTune));
+    settingsMenuItems_.push_back(uiText(UiText::WordPacing));
   } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
-    settingsMenuItems_.push_back("Back");
-    settingsMenuItems_.push_back("Theme: " + themeModeLabel());
-    settingsMenuItems_.push_back("Brightness: " + String(currentBrightnessPercent()) + "%");
+    settingsMenuItems_.push_back(uiText(UiText::Back));
+    settingsMenuItems_.push_back(uiText(UiText::Theme) + ": " + themeModeLabel());
+    settingsMenuItems_.push_back(uiText(UiText::Brightness) + ": " +
+                                 String(currentBrightnessPercent()) + "%");
+    settingsMenuItems_.push_back(uiText(UiText::Language) + ": " + uiLanguageLabel());
   } else if (menuScreen_ == MenuScreen::SettingsPacing) {
-    settingsMenuItems_.push_back("Back");
-    settingsMenuItems_.push_back("Long words: " + pacingDelayLabel(pacingLongWordDelayMs_));
-    settingsMenuItems_.push_back("Complexity: " + pacingDelayLabel(pacingComplexWordDelayMs_));
-    settingsMenuItems_.push_back("Punctuation: " + pacingDelayLabel(pacingPunctuationDelayMs_));
-    settingsMenuItems_.push_back("Reset pacing");
+    settingsMenuItems_.push_back(uiText(UiText::Back));
+    settingsMenuItems_.push_back(uiText(UiText::LongWords) + ": " +
+                                 pacingDelayLabel(pacingLongWordDelayMs_));
+    settingsMenuItems_.push_back(uiText(UiText::Complexity) + ": " +
+                                 pacingDelayLabel(pacingComplexWordDelayMs_));
+    settingsMenuItems_.push_back(uiText(UiText::Punctuation) + ": " +
+                                 pacingDelayLabel(pacingPunctuationDelayMs_));
+    settingsMenuItems_.push_back(uiText(UiText::ResetPacing));
   }
 
   if (settingsSelectedIndex_ >= settingsMenuItems_.size()) {
@@ -1341,25 +1397,40 @@ void App::applyPacingSettings() {
 
 String App::pacingDelayLabel(uint16_t delayMs) const { return String(delayMs) + " ms"; }
 
+String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }
+
 String App::themeModeLabel() const {
   if (nightMode_) {
-    return "Night";
+    return uiText(UiText::Night);
   }
-  return darkMode_ ? "Dark" : "Light";
+  return darkMode_ ? uiText(UiText::Dark) : uiText(UiText::Light);
 }
 
-String App::phantomWordsLabel() const { return phantomWordsEnabled_ ? "On" : "Off"; }
+String App::phantomWordsLabel() const {
+  return phantomWordsEnabled_ ? uiText(UiText::On) : uiText(UiText::Off);
+}
 
 String App::focusHighlightLabel() const {
-  return typographyConfig_.focusHighlight ? "On" : "Off";
+  return typographyConfig_.focusHighlight ? uiText(UiText::On) : uiText(UiText::Off);
 }
+
+String App::uiLanguageLabel() const { return Localization::languageName(uiLanguage_); }
 
 String App::readerFontSizeLabel() const {
   uint8_t levelIndex = readerFontSizeIndex_;
   if (levelIndex >= kReaderFontSizeCount) {
     levelIndex = 0;
   }
-  return kReaderFontSizeLabels[levelIndex];
+
+  switch (levelIndex) {
+    case 0:
+      return uiText(UiText::Large);
+    case 1:
+      return uiText(UiText::Medium);
+    case 2:
+    default:
+      return uiText(UiText::Small);
+  }
 }
 
 String App::readerTypefaceLabel() const {
@@ -1370,41 +1441,41 @@ String App::readerTypefaceLabel() const {
       return "OpenDyslexic";
     case DisplayManager::ReaderTypeface::Standard:
     default:
-      return "Standard";
+      return uiText(UiText::Standard);
   }
 }
 
 String App::typographyTuningLabel() const {
   switch (typographyTuningSelectedIndex_) {
     case TypographyTuningBack:
-      return "Back";
+      return uiText(UiText::Back);
     case TypographyTuningFontSize:
-      return "Font size";
+      return uiText(UiText::FontSize);
     case TypographyTuningTypeface:
-      return "Typeface";
+      return uiText(UiText::Typeface);
     case TypographyTuningPhantomWords:
-      return "Phantom words";
+      return uiText(UiText::PhantomWords);
     case TypographyTuningFocusHighlight:
-      return "Red highlight";
+      return uiText(UiText::RedHighlight);
     case TypographyTuningTracking:
-      return "Tracking";
+      return uiText(UiText::Tracking);
     case TypographyTuningAnchor:
-      return "Anchor";
+      return uiText(UiText::Anchor);
     case TypographyTuningGuideWidth:
-      return "Guide width";
+      return uiText(UiText::GuideWidth);
     case TypographyTuningGuideGap:
-      return "Guide gap";
+      return uiText(UiText::GuideGap);
     case TypographyTuningReset:
-      return "Reset";
+      return uiText(UiText::Reset);
     default:
-      return "Typography";
+      return uiText(UiText::Typography);
   }
 }
 
 String App::typographyTuningValueLabel() const {
   switch (typographyTuningSelectedIndex_) {
     case TypographyTuningBack:
-      return "tap to exit";
+      return uiText(UiText::TapToExit);
     case TypographyTuningFontSize:
       return readerFontSizeLabel();
     case TypographyTuningTypeface:
@@ -1423,7 +1494,7 @@ String App::typographyTuningValueLabel() const {
     case TypographyTuningGuideGap:
       return String(static_cast<unsigned int>(typographyConfig_.guideGap)) + " px";
     case TypographyTuningReset:
-      return "tap to reset";
+      return uiText(UiText::TapToReset);
     default:
       return "";
   }
@@ -1433,7 +1504,7 @@ void App::openBookPicker() {
   storage_.refreshBooks();
   bookMenuItems_.clear();
   bookPickerBookIndices_.clear();
-  bookMenuItems_.push_back({"Back", ""});
+  bookMenuItems_.push_back({uiText(UiText::Back), ""});
 
   const size_t count = storage_.bookCount();
   std::vector<size_t> sortedBookIndices;
@@ -1518,10 +1589,10 @@ void App::selectBookPickerItem(uint32_t nowMs) {
 
 void App::openChapterPicker() {
   chapterMenuItems_.clear();
-  chapterMenuItems_.push_back("Back");
+  chapterMenuItems_.push_back(uiText(UiText::Back));
 
   if (chapterMarkers_.empty()) {
-    chapterMenuItems_.push_back("Start of book");
+    chapterMenuItems_.push_back(uiText(UiText::StartOfBook));
     chapterPickerSelectedIndex_ = kChapterPickerFallbackIndex;
     Serial.println("[chapter-picker] No chapter markers found; showing start fallback");
   } else {
@@ -1539,7 +1610,7 @@ void App::openChapterPicker() {
     chapterPickerSelectedIndex_ = selectedChapter + 1;
   }
 
-  chapterMenuItems_.push_back("Restart book");
+  chapterMenuItems_.push_back(uiText(UiText::RestartBook));
 
   menuScreen_ = MenuScreen::ChapterPicker;
   renderChapterPicker();
@@ -1952,7 +2023,17 @@ void App::renderMenu() {
 }
 
 void App::renderMainMenu() {
-  display_.renderMenu(kMenuItems, MenuItemCount, menuSelectedIndex_);
+  std::vector<String> items;
+  items.reserve(MenuItemCount);
+  items.push_back(uiText(UiText::Resume));
+  items.push_back(uiText(UiText::Chapters));
+  items.push_back(uiText(UiText::Library));
+  items.push_back(uiText(UiText::Settings));
+#if RSVP_USB_TRANSFER_ENABLED
+  items.push_back(uiText(UiText::UsbTransfer));
+#endif
+  items.push_back(uiText(UiText::PowerOff));
+  display_.renderMenu(items, menuSelectedIndex_);
 }
 
 void App::renderSettings() {
@@ -1964,7 +2045,7 @@ void App::renderSettings() {
 
 void App::renderTypographyTuning() {
   if (kTypographyPreviewWordCount == 0) {
-    display_.renderStatus("Typography", "No samples", "");
+    display_.renderStatus(uiText(UiText::Typography), uiText(UiText::NoSamples), "");
     return;
   }
 
@@ -1984,19 +2065,19 @@ void App::renderTypographyTuning() {
   const String afterText = phantomWordsEnabled_ ? kTypographyPreviewWords[afterIndex] : "";
   const String line1 = typographyTuningLabel() + ": " + typographyTuningValueLabel();
   const String title =
-      "Typography " + String(static_cast<unsigned int>(index + 1)) + "/" +
+      uiText(UiText::Typography) + " " + String(static_cast<unsigned int>(index + 1)) + "/" +
       String(static_cast<unsigned int>(kTypographyPreviewWordCount));
-  String line2 = "Tap change  L/R sample";
+  String line2 = uiText(UiText::TapChangeSample);
   if (typographyTuningSelectedIndex_ == TypographyTuningBack) {
-    line2 = "Tap exit  L/R sample";
+    line2 = uiText(UiText::TapExitSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningPhantomWords ||
              typographyTuningSelectedIndex_ == TypographyTuningFocusHighlight) {
-    line2 = "Tap toggle  L/R sample";
+    line2 = uiText(UiText::TapToggleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningFontSize ||
              typographyTuningSelectedIndex_ == TypographyTuningTypeface) {
-    line2 = "Tap cycle  L/R sample";
+    line2 = uiText(UiText::TapCycleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningReset) {
-    line2 = "Tap reset  L/R sample";
+    line2 = uiText(UiText::TapToReset);
   }
 
   display_.renderTypographyPreview(beforeText,
@@ -2015,10 +2096,10 @@ void App::renderChapterPicker() {
 
 void App::renderRestartConfirm() {
   std::vector<String> items;
-  items.reserve(sizeof(kRestartConfirmItems) / sizeof(kRestartConfirmItems[0]));
-  for (const char *item : kRestartConfirmItems) {
-    items.push_back(item);
-  }
+  items.reserve(RestartConfirmItemCount);
+  items.push_back(uiText(UiText::AreYouSure));
+  items.push_back(uiText(UiText::NoKeepPlace));
+  items.push_back(uiText(UiText::YesRestart));
 
   display_.renderMenu(items, restartConfirmSelectedIndex_ + kRestartConfirmHeaderRows);
 }
@@ -2038,7 +2119,7 @@ DisplayManager::LibraryItem App::libraryItemForBook(size_t bookIndex) {
   }
 
   if (item.subtitle.isEmpty() && usingStorageBook_ && bookIndex == currentBookIndex_) {
-    item.subtitle = "Current book";
+    item.subtitle = uiText(UiText::CurrentBook);
   }
 
   return item;
@@ -2067,7 +2148,7 @@ String App::chapterMenuLabel(size_t chapterIndex) const {
 
 String App::currentChapterLabel() const {
   if (chapterMarkers_.empty()) {
-    return currentBookTitle_.isEmpty() ? "Start" : currentBookTitle_;
+    return currentBookTitle_.isEmpty() ? uiText(UiText::Start) : currentBookTitle_;
   }
 
   size_t currentChapter = 0;
