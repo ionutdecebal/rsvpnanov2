@@ -17,6 +17,7 @@ BOOT_APP0_GLOB = "framework-arduinoespressif32*/tools/partitions/boot_app0.bin"
 EXPORTS = {
     "waveshare_esp32s3_usb_msc": {
         "binary": "rsvp-nano.bin",
+        "ota_binary": "rsvp-nano-ota.bin",
         "manifest": "manifest.json",
         "label": "RSVP Nano firmware",
     },
@@ -45,7 +46,7 @@ def pio_command() -> str:
 def git_version() -> str:
     try:
         value = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True
+            ["git", "describe", "--tags", "--always", "--dirty"], cwd=ROOT, text=True
         ).strip()
         return value or "dev"
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -83,33 +84,32 @@ def load_flash_parts(env: str) -> list[tuple[int, Path]]:
     return sorted(parts, key=lambda item: item[0])
 
 
-def merge_firmware(pio: str, env: str, output: Path) -> None:
+def merge_firmware(env: str, output: Path) -> None:
     parts = load_flash_parts(env)
-    merge_args: list[str] = [
-        pio,
-        "pkg",
-        "exec",
-        "-p",
-        "tool-esptoolpy",
-        "--",
-        "esptool.py",
-        "--chip",
-        "esp32s3",
-        "merge_bin",
-        "-o",
-        str(output),
-        "--flash_mode",
-        "dio",
-        "--flash_freq",
-        "80m",
-        "--flash_size",
-        "16MB",
-    ]
+    output.parent.mkdir(parents=True, exist_ok=True)
 
-    for offset, path in parts:
-        merge_args.extend([hex(offset), str(path)])
+    cursor = 0
+    with output.open("wb") as merged:
+        for offset, path in parts:
+            if offset < cursor:
+                raise SystemExit(f"Overlapping flash part for {env}: {path}")
 
-    run(merge_args)
+            gap = offset - cursor
+            if gap > 0:
+                merged.write(b"\xFF" * gap)
+                cursor = offset
+
+            data = path.read_bytes()
+            merged.write(data)
+            cursor += len(data)
+
+
+def export_ota_binary(env: str, output: Path) -> None:
+    firmware_path = ROOT / ".pio" / "build" / env / "firmware.bin"
+    if not firmware_path.exists():
+        raise SystemExit(f"Missing OTA app binary for {env}: {firmware_path}")
+
+    shutil.copy2(firmware_path, output)
 
 
 def update_manifest(path: Path, version: str) -> None:
@@ -137,7 +137,10 @@ def main() -> int:
 
         output = WEB_FIRMWARE_DIR / export["binary"]
         print(f"Exporting {export['label']} -> {output}")
-        merge_firmware(pio, env, output)
+        merge_firmware(env, output)
+        ota_output = WEB_FIRMWARE_DIR / export["ota_binary"]
+        print(f"Exporting OTA app -> {ota_output}")
+        export_ota_binary(env, ota_output)
         update_manifest(WEB_FIRMWARE_DIR / export["manifest"], args.version)
 
     print(f"Web firmware exported to {WEB_FIRMWARE_DIR}")

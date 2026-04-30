@@ -2,6 +2,7 @@
 
 #include <esp_sleep.h>
 #include <esp_log.h>
+#include <WiFi.h>
 #include <algorithm>
 #include <cstdio>
 #include <iterator>
@@ -33,6 +34,8 @@ constexpr uint16_t kSwipeThresholdPx = 40;
 constexpr uint16_t kAxisBiasPx = 12;
 constexpr uint16_t kTapSlopPx = 18;
 constexpr uint16_t kReaderDoubleTapSlopPx = 36;
+constexpr uint16_t kFooterMetricTapWidthPx = 220;
+constexpr uint16_t kFooterMetricTapHeightPx = 32;
 constexpr uint16_t kScrubStepPx = 22;
 constexpr uint16_t kBrowseNeutralZonePx = 14;
 constexpr int kMaxScrubStepsPerGesture = 96;
@@ -102,6 +105,8 @@ constexpr size_t kSettingsBackIndex = 0;
 constexpr size_t kSettingsHomeDisplayIndex = 1;
 constexpr size_t kSettingsHomeTypographyIndex = 2;
 constexpr size_t kSettingsHomePacingIndex = 3;
+constexpr size_t kSettingsHomeWifiIndex = 4;
+constexpr size_t kSettingsHomeUpdateIndex = 5;
 constexpr size_t kSettingsDisplayReadingModeIndex = 1;
 constexpr size_t kSettingsDisplayThemeIndex = 2;
 constexpr size_t kSettingsDisplayBrightnessIndex = 3;
@@ -110,10 +115,16 @@ constexpr size_t kSettingsPacingLongWordsIndex = 1;
 constexpr size_t kSettingsPacingComplexityIndex = 2;
 constexpr size_t kSettingsPacingPunctuationIndex = 3;
 constexpr size_t kSettingsPacingResetIndex = 4;
+constexpr size_t kWifiSettingsNetworkIndex = 1;
+constexpr size_t kWifiSettingsChooseIndex = 2;
+constexpr size_t kWifiSettingsAutoUpdateIndex = 3;
+constexpr size_t kWifiSettingsForgetIndex = 4;
 
 constexpr size_t kBookPickerBackIndex = 0;
 constexpr size_t kChapterPickerBackIndex = 0;
 constexpr size_t kChapterPickerFallbackIndex = 1;
+constexpr size_t kWifiNetworksBackIndex = 0;
+constexpr size_t kWifiNetworksFirstItemIndex = 1;
 constexpr const char *kPrefsNamespace = "rsvp";
 constexpr const char *kPrefBookPath = "book";
 constexpr const char *kPrefLegacyWordIndex = "word";
@@ -124,6 +135,7 @@ constexpr const char *kPrefNightMode = "night";
 constexpr const char *kPrefUiLanguage = "ui_lang";
 constexpr const char *kPrefReaderMode = "read_mode";
 constexpr const char *kPrefPhantomWords = "phantom_on";
+constexpr const char *kPrefFooterMetricMode = "prog_md";
 constexpr const char *kPrefReaderFontSize = "font_size";
 constexpr const char *kPrefReaderTypeface = "typeface";
 constexpr const char *kPrefTypographyFocusHighlight = "type_hlt";
@@ -138,6 +150,9 @@ constexpr const char *kPrefTypographyAnchor = "type_anc";
 constexpr const char *kPrefTypographyGuideWidth = "type_wid";
 constexpr const char *kPrefTypographyGuideGap = "type_gap";
 constexpr const char *kPrefRecentSeq = "seq";
+constexpr const char *kPrefWifiSsid = "wifi_ssid";
+constexpr const char *kPrefWifiPass = "wifi_pass";
+constexpr const char *kPrefOtaAuto = "ota_auto";
 constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
@@ -168,6 +183,11 @@ constexpr const char *kTypographyPreviewWords[] = {
 };
 constexpr size_t kTypographyPreviewWordCount =
     sizeof(kTypographyPreviewWords) / sizeof(kTypographyPreviewWords[0]);
+constexpr size_t kWifiPasswordMaxLength = 63;
+constexpr uint16_t kKeyboardMarginX = 8;
+constexpr uint16_t kKeyboardTopY = 48;
+constexpr uint16_t kKeyboardRowGap = 4;
+constexpr uint16_t kKeyboardRowHeight = 27;
 
 void logApp(const char *message) {
   ESP_LOGI(kAppTag, "%s", message);
@@ -213,6 +233,58 @@ int nextCyclicSetting(int value, int minValue, int maxValue, int step = 1) {
 
 DisplayManager::TypographyConfig defaultTypographyConfig() {
   return DisplayManager::TypographyConfig();
+}
+
+bool wifiNetworkRequiresPassword(uint8_t authMode) {
+  return static_cast<wifi_auth_mode_t>(authMode) != WIFI_AUTH_OPEN;
+}
+
+String wifiSecurityLabel(uint8_t authMode) {
+  return wifiNetworkRequiresPassword(authMode) ? "Secure" : "Open";
+}
+
+String maskedValue(const String &value) {
+  String masked;
+  masked.reserve(value.length());
+  for (size_t i = 0; i < value.length(); ++i) {
+    masked += '*';
+  }
+  return masked;
+}
+
+const char *keyboardRowText(uint8_t modeValue, size_t rowIndex) {
+  static constexpr const char *kLowerRows[] = {
+      "qwertyuiop",
+      "asdfghjkl",
+      "zxcvbnm",
+  };
+  static constexpr const char *kUpperRows[] = {
+      "QWERTYUIOP",
+      "ASDFGHJKL",
+      "ZXCVBNM",
+  };
+  static constexpr const char *kSymbolRows[] = {
+      "1234567890",
+      "!@#$%^&*?",
+      "-_=+/:;.,",
+  };
+
+  if (rowIndex >= 3) {
+    return "";
+  }
+
+  switch (modeValue) {
+    case 1:
+      return kUpperRows[rowIndex];
+    case 2:
+      return kSymbolRows[rowIndex];
+    default:
+      return kLowerRows[rowIndex];
+  }
+}
+
+String storedOrFallbackLabel(const String &value, const String &fallback) {
+  return value.isEmpty() ? fallback : value;
 }
 
 DisplayManager::ReaderTypeface readerTypefaceFromSetting(uint8_t value) {
@@ -314,6 +386,19 @@ void App::begin() {
   if (readerFontSizeIndex_ >= kReaderFontSizeCount) {
     readerFontSizeIndex_ = 0;
   }
+  switch (preferences_.getUChar(kPrefFooterMetricMode,
+                                static_cast<uint8_t>(footerMetricMode_))) {
+    case static_cast<uint8_t>(FooterMetricMode::ChapterTime):
+      footerMetricMode_ = FooterMetricMode::ChapterTime;
+      break;
+    case static_cast<uint8_t>(FooterMetricMode::BookTime):
+      footerMetricMode_ = FooterMetricMode::BookTime;
+      break;
+    case static_cast<uint8_t>(FooterMetricMode::Percentage):
+    default:
+      footerMetricMode_ = FooterMetricMode::Percentage;
+      break;
+  }
   pacingLongWordDelayMs_ =
       loadPacingDelayMs(preferences_, kPrefPacingLongMs, kPrefLegacyPacingLong);
   pacingComplexWordDelayMs_ =
@@ -345,6 +430,7 @@ void App::begin() {
   bootStartedMs_ = millis();
   lastStateLogMs_ = bootStartedMs_;
   lastScrollAnimationRenderMs_ = 0;
+  Serial.printf("[app] version=%s\n", otaUpdater_.currentVersion().c_str());
 
   logApp("Initializing hardware modules");
   const bool displayReady = display_.begin();
@@ -388,6 +474,7 @@ void App::begin() {
     Serial.println("[app] using built-in demo text");
   }
 
+  maybeAutoCheckForUpdates(bootStartedMs_);
   Serial.printf("[app] WPM=%u interval=%lu ms\n", reader_.wpm(),
                 static_cast<unsigned long>(reader_.wordIntervalMs()));
 
@@ -690,7 +777,7 @@ void App::applyDisplayPreferences(uint32_t nowMs, bool rerender) {
 
   if (state_ == AppState::Menu) {
     if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-        menuScreen_ == MenuScreen::SettingsPacing) {
+        menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
       rebuildSettingsMenuItems();
       renderSettings();
       return;
@@ -769,7 +856,7 @@ void App::cycleUiLanguage(uint32_t nowMs) {
 
   if (state_ == AppState::Menu) {
     if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-        menuScreen_ == MenuScreen::SettingsPacing) {
+        menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
       rebuildSettingsMenuItems();
       renderSettings();
       return;
@@ -861,6 +948,54 @@ void App::updateWpmFeedback(uint32_t nowMs) {
 }
 
 void App::resetReaderTapTracking() { lastReaderTapValid_ = false; }
+
+bool App::isFooterMetricTap(uint16_t x, uint16_t y) const {
+  return x >= BoardConfig::DISPLAY_WIDTH - kFooterMetricTapWidthPx &&
+         y >= BoardConfig::DISPLAY_HEIGHT - kFooterMetricTapHeightPx;
+}
+
+bool App::readerFooterVisible() const {
+  return scrollModeEnabled() || state_ != AppState::Playing || contextViewVisible_ ||
+         wpmFeedbackVisible_;
+}
+
+bool App::handleFooterMetricTap(uint16_t x, uint16_t y, uint32_t nowMs) {
+  if (!readerFooterVisible() || !isFooterMetricTap(x, y)) {
+    return false;
+  }
+
+  switch (footerMetricMode_) {
+    case FooterMetricMode::Percentage:
+      footerMetricMode_ = FooterMetricMode::ChapterTime;
+      break;
+    case FooterMetricMode::ChapterTime:
+      footerMetricMode_ = FooterMetricMode::BookTime;
+      break;
+    case FooterMetricMode::BookTime:
+    default:
+      footerMetricMode_ = FooterMetricMode::Percentage;
+      break;
+  }
+
+  preferences_.putUChar(kPrefFooterMetricMode, static_cast<uint8_t>(footerMetricMode_));
+  resetReaderTapTracking();
+  renderActiveReader(nowMs);
+  const char *modeName = "percent";
+  switch (footerMetricMode_) {
+    case FooterMetricMode::ChapterTime:
+      modeName = "chapter";
+      break;
+    case FooterMetricMode::BookTime:
+      modeName = "book";
+      break;
+    case FooterMetricMode::Percentage:
+    default:
+      modeName = "percent";
+      break;
+  }
+  Serial.printf("[reader] footer metric=%s\n", modeName);
+  return true;
+}
 
 void App::handleReaderTap(uint16_t x, uint16_t y, uint32_t nowMs) {
   if (lastReaderTapValid_ && nowMs - lastReaderTapMs_ <= kReaderDoubleTapWindowMs &&
@@ -1005,6 +1140,9 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       pausedTouch_.active = false;
       pausedTouchIntent_ = TouchIntent::None;
       if (tapLike) {
+        if (handleFooterMetricTap(event.x, event.y, nowMs)) {
+          return;
+        }
         if (playLocked_ || pauseAtSentenceEndRequested_) {
           resetReaderTapTracking();
           requestReaderPauseAtSentenceEnd(nowMs);
@@ -1083,6 +1221,9 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   if (ended) {
     pausedTouch_.active = false;
     pausedTouchIntent_ = TouchIntent::None;
+    if (tapLike && handleFooterMetricTap(event.x, event.y, nowMs)) {
+      return;
+    }
     if (tapLike && previewBrowseMode) {
       resetReaderTapTracking();
       contextViewVisible_ = false;
@@ -1159,7 +1300,8 @@ void App::renderContextBrowsePreview(size_t currentIndex, uint16_t scrollProgres
   contextViewVisible_ = true;
   display_.renderScrollView(contextPreviewWords_, currentReaderContentToken(),
                             contextPreviewStartIndex_, currentIndex, scrollProgressPermille,
-                            currentChapterLabel(), readingProgressPercent(), "");
+                            currentChapterLabel(), readingProgressPercent(), "",
+                            currentFooterMetricLabel());
 }
 
 void App::applyBrowseHoldScroll(uint16_t y, uint32_t elapsedMs, uint32_t nowMs) {
@@ -1220,6 +1362,13 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   const int absDeltaX = abs(deltaX);
   const int absDeltaY = abs(deltaY);
 
+  if (menuScreen_ == MenuScreen::TextEntry) {
+    if (absDeltaX <= static_cast<int>(kTapSlopPx) && absDeltaY <= static_cast<int>(kTapSlopPx)) {
+      handleTextEntryTap(event.x, event.y, nowMs);
+    }
+    return;
+  }
+
   if (menuScreen_ == MenuScreen::TypographyTuning &&
       absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
       absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
@@ -1239,16 +1388,19 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
 }
 
 void App::moveMenuSelection(int direction) {
-  if (direction == 0) {
+  if (direction == 0 || menuScreen_ == MenuScreen::TextEntry) {
     return;
   }
 
   size_t *selectedIndex = &menuSelectedIndex_;
   size_t itemCount = MenuItemCount;
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
     selectedIndex = &settingsSelectedIndex_;
     itemCount = settingsMenuItems_.size();
+  } else if (menuScreen_ == MenuScreen::WifiNetworks) {
+    selectedIndex = &wifiNetworkSelectedIndex_;
+    itemCount = wifiNetworkMenuItems_.size();
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     selectedIndex = &typographyTuningSelectedIndex_;
     itemCount = TypographyTuningItemCount;
@@ -1278,8 +1430,10 @@ void App::moveMenuSelection(int direction) {
 
   renderMenu();
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
     Serial.printf("[settings] selected=%s\n", settingsMenuItems_[settingsSelectedIndex_].c_str());
+  } else if (menuScreen_ == MenuScreen::WifiNetworks) {
+    Serial.printf("[wifi] selected=%s\n", wifiNetworkMenuItems_[wifiNetworkSelectedIndex_].title.c_str());
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     Serial.printf("[typography] selected=%s\n", typographyTuningLabel().c_str());
   } else if (menuScreen_ == MenuScreen::BookPicker) {
@@ -1333,8 +1487,12 @@ void App::moveMenuSelection(int direction) {
 
 void App::selectMenuItem(uint32_t nowMs) {
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
     selectSettingsItem(nowMs);
+    return;
+  }
+  if (menuScreen_ == MenuScreen::WifiNetworks) {
+    selectWifiNetworkItem(nowMs);
     return;
   }
   if (menuScreen_ == MenuScreen::TypographyTuning) {
@@ -1389,7 +1547,11 @@ void App::openSettings() {
 
 void App::selectSettingsItem(uint32_t nowMs) {
   if (settingsMenuItems_.empty()) {
-    openSettings();
+    if (menuScreen_ == MenuScreen::WifiSettings) {
+      openWifiSettings();
+    } else {
+      openSettings();
+    }
     return;
   }
 
@@ -1414,9 +1576,21 @@ void App::selectSettingsItem(uint32_t nowMs) {
         rebuildSettingsMenuItems();
         renderSettings();
         return;
+      case kSettingsHomeWifiIndex:
+        openWifiSettings();
+        return;
+      case kSettingsHomeUpdateIndex: {
+        runFirmwareUpdate(preferredOtaConfig(), false, nowMs);
+        return;
+      }
       default:
         return;
     }
+  }
+
+  if (menuScreen_ == MenuScreen::WifiSettings) {
+    selectWifiSettingsItem(nowMs);
+    return;
   }
 
   if (menuScreen_ == MenuScreen::SettingsDisplay) {
@@ -1485,6 +1659,398 @@ void App::selectSettingsItem(uint32_t nowMs) {
   applyPacingSettings();
   rebuildSettingsMenuItems();
   renderSettings();
+}
+
+void App::openWifiSettings() {
+  settingsSelectedIndex_ = configuredWifiSsid().isEmpty() ? kWifiSettingsChooseIndex
+                                                          : kWifiSettingsAutoUpdateIndex;
+  menuScreen_ = MenuScreen::WifiSettings;
+  rebuildSettingsMenuItems();
+  renderSettings();
+}
+
+void App::selectWifiSettingsItem(uint32_t nowMs) {
+  (void)nowMs;
+
+  switch (settingsSelectedIndex_) {
+    case kSettingsBackIndex:
+      settingsSelectedIndex_ = kSettingsHomeWifiIndex;
+      menuScreen_ = MenuScreen::SettingsHome;
+      rebuildSettingsMenuItems();
+      renderSettings();
+      return;
+    case kWifiSettingsNetworkIndex:
+    case kWifiSettingsChooseIndex:
+      scanWifiNetworks();
+      return;
+    case kWifiSettingsAutoUpdateIndex:
+      preferences_.putBool(kPrefOtaAuto, !otaAutoCheckEnabled());
+      rebuildSettingsMenuItems();
+      renderSettings();
+      return;
+    case kWifiSettingsForgetIndex:
+      preferences_.remove(kPrefWifiSsid);
+      preferences_.remove(kPrefWifiPass);
+      display_.renderStatus("Wi-Fi", "Credentials cleared", "");
+      delay(900);
+      rebuildSettingsMenuItems();
+      renderSettings();
+      return;
+    default:
+      return;
+  }
+}
+
+void App::scanWifiNetworks() {
+  display_.renderProgress("Wi-Fi", "Scanning networks", "", 5);
+
+  WiFi.persistent(false);
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_STA);
+  WiFi.scanDelete();
+
+  const int networkCount = WiFi.scanNetworks(false, true);
+  wifiNetworks_.clear();
+  wifiNetworkMenuItems_.clear();
+  wifiNetworkMenuItems_.push_back({uiText(UiText::Back), ""});
+
+  if (networkCount > 0) {
+    for (int i = 0; i < networkCount; ++i) {
+      const String ssid = WiFi.SSID(i);
+      if (ssid.isEmpty()) {
+        continue;
+      }
+
+      WifiNetworkInfo network;
+      network.ssid = ssid;
+      network.rssi = WiFi.RSSI(i);
+      network.authMode = static_cast<uint8_t>(WiFi.encryptionType(i));
+      wifiNetworks_.push_back(network);
+    }
+  }
+
+  WiFi.scanDelete();
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
+
+  if (wifiNetworks_.empty()) {
+    display_.renderStatus("Wi-Fi", "No networks found", "");
+    delay(1200);
+    openWifiSettings();
+    return;
+  }
+
+  const String savedSsid = configuredWifiSsid();
+  std::stable_sort(wifiNetworks_.begin(), wifiNetworks_.end(),
+                   [&savedSsid](const WifiNetworkInfo &left, const WifiNetworkInfo &right) {
+                     const bool leftSaved = !savedSsid.isEmpty() && left.ssid == savedSsid;
+                     const bool rightSaved = !savedSsid.isEmpty() && right.ssid == savedSsid;
+                     if (leftSaved != rightSaved) {
+                       return leftSaved;
+                     }
+                     if (left.rssi != right.rssi) {
+                       return left.rssi > right.rssi;
+                     }
+                     return left.ssid < right.ssid;
+                   });
+
+  wifiNetworkMenuItems_.reserve(wifiNetworks_.size() + 1);
+  for (const WifiNetworkInfo &network : wifiNetworks_) {
+    wifiNetworkMenuItems_.push_back(
+        {network.ssid, wifiSecurityLabel(network.authMode) + "  " + String(network.rssi) + " dBm"});
+  }
+
+  wifiNetworkSelectedIndex_ =
+      wifiNetworkMenuItems_.size() > 1 ? kWifiNetworksFirstItemIndex : kWifiNetworksBackIndex;
+  menuScreen_ = MenuScreen::WifiNetworks;
+  renderWifiNetworks();
+}
+
+void App::renderWifiNetworks() {
+  if (wifiNetworkMenuItems_.empty()) {
+    display_.renderStatus("Wi-Fi", "No networks found", "");
+    return;
+  }
+
+  display_.renderLibrary(wifiNetworkMenuItems_, wifiNetworkSelectedIndex_);
+}
+
+void App::selectWifiNetworkItem(uint32_t nowMs) {
+  (void)nowMs;
+
+  if (wifiNetworkSelectedIndex_ == kWifiNetworksBackIndex || wifiNetworkMenuItems_.size() <= 1) {
+    openWifiSettings();
+    return;
+  }
+
+  const size_t networkIndex = wifiNetworkSelectedIndex_ - kWifiNetworksFirstItemIndex;
+  if (networkIndex >= wifiNetworks_.size()) {
+    openWifiSettings();
+    return;
+  }
+
+  const WifiNetworkInfo &network = wifiNetworks_[networkIndex];
+  if (wifiNetworkRequiresPassword(network.authMode)) {
+    String initialValue;
+    if (configuredWifiSsid() == network.ssid) {
+      initialValue = preferredOtaConfig().wifiPassword;
+    }
+    openTextEntry(TextEntryPurpose::WifiPassword, network.ssid, "Password", "",
+                  initialValue, network.ssid, true, kWifiPasswordMaxLength,
+                  MenuScreen::WifiNetworks);
+    return;
+  }
+
+  preferences_.putString(kPrefWifiSsid, network.ssid);
+  preferences_.putString(kPrefWifiPass, "");
+  display_.renderStatus("Wi-Fi", "Network saved", network.ssid);
+  delay(900);
+  openWifiSettings();
+}
+
+void App::openTextEntry(TextEntryPurpose purpose, const String &title, const String &prompt,
+                        const String &helperText, const String &initialValue,
+                        const String &contextValue, bool masked, size_t maxLength,
+                        MenuScreen returnScreen) {
+  textEntrySession_ = TextEntrySession();
+  textEntrySession_.active = true;
+  textEntrySession_.purpose = purpose;
+  textEntrySession_.mode = KeyboardMode::Lower;
+  textEntrySession_.returnScreen = returnScreen;
+  textEntrySession_.title = title;
+  textEntrySession_.prompt = prompt;
+  textEntrySession_.helperText = helperText;
+  textEntrySession_.value = initialValue;
+  textEntrySession_.contextValue = contextValue;
+  textEntrySession_.maxLength = maxLength;
+  textEntrySession_.masked = masked;
+  textEntrySession_.revealValue = false;
+  menuScreen_ = MenuScreen::TextEntry;
+  rebuildTextEntryButtons();
+  renderTextEntry();
+}
+
+void App::rebuildTextEntryButtons() {
+  textEntryButtons_.clear();
+  if (!textEntrySession_.active) {
+    return;
+  }
+
+  const uint16_t rowPitch = kKeyboardRowHeight + kKeyboardRowGap;
+  for (size_t rowIndex = 0; rowIndex < 3; ++rowIndex) {
+    const String rowChars = keyboardRowText(static_cast<uint8_t>(textEntrySession_.mode), rowIndex);
+    const size_t keyCount = rowChars.length();
+    if (keyCount == 0) {
+      continue;
+    }
+
+    const int availableWidth =
+        BoardConfig::DISPLAY_WIDTH - (2 * kKeyboardMarginX) -
+        static_cast<int>((keyCount - 1) * kKeyboardRowGap);
+    const int keyWidth = std::max(28, availableWidth / static_cast<int>(keyCount));
+    const int totalWidth =
+        keyWidth * static_cast<int>(keyCount) + static_cast<int>((keyCount - 1) * kKeyboardRowGap);
+    int x = std::max(0, (BoardConfig::DISPLAY_WIDTH - totalWidth) / 2);
+    const int y = kKeyboardTopY + static_cast<int>(rowIndex * rowPitch);
+
+    for (size_t charIndex = 0; charIndex < keyCount; ++charIndex) {
+      TextEntryButton button;
+      button.view.label = String(rowChars[charIndex]);
+      button.view.x = static_cast<uint16_t>(x);
+      button.view.y = static_cast<uint16_t>(y);
+      button.view.width = static_cast<uint16_t>(keyWidth);
+      button.view.height = kKeyboardRowHeight;
+      button.action = TextEntryAction::Insert;
+      button.payload = String(rowChars[charIndex]);
+      textEntryButtons_.push_back(button);
+      x += keyWidth + kKeyboardRowGap;
+    }
+  }
+
+  struct ControlButtonDef {
+    String label;
+    TextEntryAction action;
+    uint16_t units;
+    bool accent;
+    bool active;
+  };
+
+  const bool revealActive = textEntrySession_.masked && textEntrySession_.revealValue;
+  const ControlButtonDef controls[] = {
+      {"abc", TextEntryAction::SetLower, 11, false,
+       textEntrySession_.mode == KeyboardMode::Lower},
+      {"ABC", TextEntryAction::SetUpper, 11, false,
+       textEntrySession_.mode == KeyboardMode::Upper},
+      {"123", TextEntryAction::SetSymbols, 11, false,
+       textEntrySession_.mode == KeyboardMode::Symbols},
+      {"space", TextEntryAction::Space, 24, false, false},
+      {"back", TextEntryAction::Backspace, 13, false, false},
+      {textEntrySession_.masked ? (revealActive ? "hide" : "show") : "clear",
+       textEntrySession_.masked ? TextEntryAction::ToggleMask : TextEntryAction::Clear, 13, false,
+       revealActive},
+      {"save", TextEntryAction::Save, 12, true, false},
+      {"cancel", TextEntryAction::Cancel, 14, false, false},
+  };
+
+  uint16_t totalUnits = 0;
+  for (const ControlButtonDef &control : controls) {
+    totalUnits += control.units;
+  }
+
+  const size_t controlCount = sizeof(controls) / sizeof(controls[0]);
+  const int totalGapWidth = static_cast<int>((controlCount - 1) * kKeyboardRowGap);
+  const int availableWidth = BoardConfig::DISPLAY_WIDTH - (2 * kKeyboardMarginX) - totalGapWidth;
+  int remainingWidth = availableWidth;
+  uint16_t x = kKeyboardMarginX;
+  const uint16_t y = kKeyboardTopY + static_cast<uint16_t>(3 * rowPitch);
+
+  for (size_t i = 0; i < controlCount; ++i) {
+    const ControlButtonDef &control = controls[i];
+    int width = remainingWidth;
+    if (i + 1 < controlCount) {
+      width = (availableWidth * control.units) / totalUnits;
+      remainingWidth -= width;
+    }
+
+    TextEntryButton button;
+    button.view.label = control.label;
+    button.view.x = x;
+    button.view.y = y;
+    button.view.width = static_cast<uint16_t>(std::max(28, width));
+    button.view.height = kKeyboardRowHeight;
+    button.view.accent = control.accent;
+    button.view.active = control.active;
+    button.action = control.action;
+    textEntryButtons_.push_back(button);
+
+    x = static_cast<uint16_t>(x + button.view.width + kKeyboardRowGap);
+  }
+}
+
+void App::renderTextEntry() {
+  if (!textEntrySession_.active) {
+    return;
+  }
+
+  const String visibleValue =
+      (textEntrySession_.masked && !textEntrySession_.revealValue)
+          ? maskedValue(textEntrySession_.value)
+          : textEntrySession_.value;
+
+  std::vector<DisplayManager::Button> buttons;
+  buttons.reserve(textEntryButtons_.size());
+  for (const TextEntryButton &button : textEntryButtons_) {
+    buttons.push_back(button.view);
+  }
+
+  display_.renderTextEntry(textEntrySession_.title, textEntrySession_.prompt, visibleValue,
+                           textEntrySession_.helperText, buttons);
+}
+
+bool App::handleTextEntryTap(uint16_t x, uint16_t y, uint32_t nowMs) {
+  if (!textEntrySession_.active) {
+    return false;
+  }
+
+  for (size_t i = 0; i < textEntryButtons_.size(); ++i) {
+    const DisplayManager::Button &button = textEntryButtons_[i].view;
+    const uint16_t maxX = button.x + button.width;
+    const uint16_t maxY = button.y + button.height;
+    if (x < button.x || x > maxX || y < button.y || y > maxY) {
+      continue;
+    }
+
+    activateTextEntryButton(i, nowMs);
+    return true;
+  }
+
+  return false;
+}
+
+void App::activateTextEntryButton(size_t buttonIndex, uint32_t nowMs) {
+  if (buttonIndex >= textEntryButtons_.size()) {
+    return;
+  }
+
+  TextEntryButton &button = textEntryButtons_[buttonIndex];
+  switch (button.action) {
+    case TextEntryAction::Insert:
+      if (textEntrySession_.value.length() < textEntrySession_.maxLength) {
+        textEntrySession_.value += button.payload;
+      }
+      break;
+    case TextEntryAction::SetLower:
+      textEntrySession_.mode = KeyboardMode::Lower;
+      break;
+    case TextEntryAction::SetUpper:
+      textEntrySession_.mode = KeyboardMode::Upper;
+      break;
+    case TextEntryAction::SetSymbols:
+      textEntrySession_.mode = KeyboardMode::Symbols;
+      break;
+    case TextEntryAction::Space:
+      if (textEntrySession_.value.length() < textEntrySession_.maxLength) {
+        textEntrySession_.value += ' ';
+      }
+      break;
+    case TextEntryAction::Backspace:
+      if (!textEntrySession_.value.isEmpty()) {
+        textEntrySession_.value.remove(textEntrySession_.value.length() - 1);
+      }
+      break;
+    case TextEntryAction::Clear:
+      textEntrySession_.value = "";
+      break;
+    case TextEntryAction::ToggleMask:
+      if (textEntrySession_.masked) {
+        textEntrySession_.revealValue = !textEntrySession_.revealValue;
+      }
+      break;
+    case TextEntryAction::Save:
+      commitTextEntry(nowMs);
+      return;
+    case TextEntryAction::Cancel:
+      menuScreen_ = textEntrySession_.returnScreen;
+      textEntrySession_ = TextEntrySession();
+      textEntryButtons_.clear();
+      renderMenu();
+      return;
+  }
+
+  rebuildTextEntryButtons();
+  renderTextEntry();
+}
+
+void App::commitTextEntry(uint32_t nowMs) {
+  (void)nowMs;
+
+  switch (textEntrySession_.purpose) {
+    case TextEntryPurpose::WifiPassword: {
+      if (textEntrySession_.value.isEmpty()) {
+        display_.renderStatus("Wi-Fi", "Password required", textEntrySession_.contextValue);
+        delay(1000);
+        renderTextEntry();
+        return;
+      }
+
+      const String ssid = textEntrySession_.contextValue;
+      preferences_.putString(kPrefWifiSsid, ssid);
+      preferences_.putString(kPrefWifiPass, textEntrySession_.value);
+      textEntrySession_ = TextEntrySession();
+      textEntryButtons_.clear();
+      display_.renderStatus("Wi-Fi", "Network saved", ssid);
+      delay(900);
+      openWifiSettings();
+      return;
+    }
+    case TextEntryPurpose::None:
+    default:
+      menuScreen_ = textEntrySession_.returnScreen;
+      textEntrySession_ = TextEntrySession();
+      textEntryButtons_.clear();
+      renderMenu();
+      return;
+  }
 }
 
 void App::openTypographyTuning() {
@@ -1583,6 +2149,8 @@ void App::rebuildSettingsMenuItems() {
     settingsMenuItems_.push_back(uiText(UiText::Display));
     settingsMenuItems_.push_back(uiText(UiText::TypographyTune));
     settingsMenuItems_.push_back(uiText(UiText::WordPacing));
+    settingsMenuItems_.push_back("Wi-Fi");
+    settingsMenuItems_.push_back(firmwareUpdateMenuLabel());
   } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
     settingsMenuItems_.push_back(uiText(UiText::Back));
     settingsMenuItems_.push_back(uiText(UiText::ReadingMode) + ": " + readerModeLabel());
@@ -1599,6 +2167,12 @@ void App::rebuildSettingsMenuItems() {
     settingsMenuItems_.push_back(uiText(UiText::Punctuation) + ": " +
                                  pacingDelayLabel(pacingPunctuationDelayMs_));
     settingsMenuItems_.push_back(uiText(UiText::ResetPacing));
+  } else if (menuScreen_ == MenuScreen::WifiSettings) {
+    settingsMenuItems_.push_back(uiText(UiText::Back));
+    settingsMenuItems_.push_back("Network: " + storedOrFallbackLabel(configuredWifiSsid(), "Not set"));
+    settingsMenuItems_.push_back("Choose network");
+    settingsMenuItems_.push_back("Auto OTA: " + String(otaAutoCheckEnabled() ? "On" : "Off"));
+    settingsMenuItems_.push_back("Forget network");
   }
 
   if (settingsSelectedIndex_ >= settingsMenuItems_.size()) {
@@ -1619,7 +2193,95 @@ void App::applyPacingSettings() {
                 static_cast<unsigned int>(pacingPunctuationDelayMs_));
 }
 
+OtaUpdater::Config App::preferredOtaConfig() {
+  OtaUpdater::Config otaConfig;
+  otaUpdater_.loadConfig(otaConfig);
+
+  if (preferences_.isKey(kPrefWifiSsid)) {
+    otaConfig.wifiSsid = preferences_.getString(kPrefWifiSsid, "");
+  }
+  if (preferences_.isKey(kPrefWifiPass)) {
+    otaConfig.wifiPassword = preferences_.getString(kPrefWifiPass, "");
+  }
+  if (preferences_.isKey(kPrefOtaAuto)) {
+    otaConfig.autoCheck = preferences_.getBool(kPrefOtaAuto, otaConfig.autoCheck);
+  }
+
+  return otaConfig;
+}
+
+String App::configuredWifiSsid() {
+  String ssid = preferences_.getString(kPrefWifiSsid, "");
+  if (ssid.isEmpty()) {
+    OtaUpdater::Config otaConfig;
+    otaUpdater_.loadConfig(otaConfig);
+    ssid = otaConfig.wifiSsid;
+  }
+  ssid.trim();
+  return ssid;
+}
+
+bool App::otaAutoCheckEnabled() {
+  if (preferences_.isKey(kPrefOtaAuto)) {
+    return preferences_.getBool(kPrefOtaAuto, false);
+  }
+
+  OtaUpdater::Config otaConfig;
+  otaUpdater_.loadConfig(otaConfig);
+  return otaConfig.autoCheck;
+}
+
+void App::maybeAutoCheckForUpdates(uint32_t nowMs) {
+  OtaUpdater::Config otaConfig = preferredOtaConfig();
+  if (!otaConfig.autoCheck || !otaUpdater_.isConfigured(otaConfig)) {
+    return;
+  }
+
+  Serial.println("[ota] auto-check enabled");
+  runFirmwareUpdate(otaConfig, true, nowMs);
+}
+
+void App::runFirmwareUpdate(const OtaUpdater::Config &config, bool automatic, uint32_t nowMs) {
+  (void)nowMs;
+  if (!otaUpdater_.isConfigured(config)) {
+    if (!automatic) {
+      display_.renderStatus("OTA", "Wi-Fi not set", "Settings -> Wi-Fi");
+      delay(1600);
+      rebuildSettingsMenuItems();
+      renderSettings();
+    }
+    return;
+  }
+
+  saveReadingPosition(true);
+  const OtaUpdater::Result result =
+      otaUpdater_.checkAndInstall(config, &App::handleStorageStatus, this);
+
+  Serial.printf("[ota] code=%u current=%s latest=%s summary=%s detail=%s\n",
+                static_cast<unsigned int>(result.code), result.currentVersion.c_str(),
+                result.latestVersion.c_str(), result.summary.c_str(), result.detail.c_str());
+
+  if (result.rebootRequired) {
+    display_.renderStatus("OTA", "Restarting", result.latestVersion);
+    delay(300);
+    ESP.restart();
+    return;
+  }
+
+  if (automatic) {
+    return;
+  }
+
+  const String line2 = result.detail.isEmpty() ? result.currentVersion : result.detail;
+  display_.renderStatus("OTA", result.summary, line2);
+  delay(1600);
+  rebuildSettingsMenuItems();
+  renderSettings();
+}
+
 String App::pacingDelayLabel(uint16_t delayMs) const { return String(delayMs) + " ms"; }
+
+String App::firmwareUpdateMenuLabel() const { return "Firmware update"; }
 
 String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }
 
@@ -2242,8 +2904,12 @@ int App::findBookIndexByPath(const String &path) const {
 
 void App::renderMenu() {
   if (menuScreen_ == MenuScreen::SettingsHome || menuScreen_ == MenuScreen::SettingsDisplay ||
-      menuScreen_ == MenuScreen::SettingsPacing) {
+      menuScreen_ == MenuScreen::SettingsPacing || menuScreen_ == MenuScreen::WifiSettings) {
     renderSettings();
+  } else if (menuScreen_ == MenuScreen::WifiNetworks) {
+    renderWifiNetworks();
+  } else if (menuScreen_ == MenuScreen::TextEntry) {
+    renderTextEntry();
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     renderTypographyTuning();
   } else if (menuScreen_ == MenuScreen::BookPicker) {
@@ -2381,9 +3047,9 @@ String App::chapterMenuLabel(size_t chapterIndex) const {
   return label;
 }
 
-String App::currentChapterLabel() const {
+size_t App::currentChapterIndex() const {
   if (chapterMarkers_.empty()) {
-    return currentBookTitle_.isEmpty() ? uiText(UiText::Start) : currentBookTitle_;
+    return static_cast<size_t>(-1);
   }
 
   size_t currentChapter = 0;
@@ -2394,7 +3060,87 @@ String App::currentChapterLabel() const {
     }
   }
 
-  return chapterMarkers_[currentChapter].title;
+  return currentChapter;
+}
+
+String App::currentChapterLabel() const {
+  const size_t chapterIndex = currentChapterIndex();
+  if (chapterIndex >= chapterMarkers_.size()) {
+    return currentBookTitle_.isEmpty() ? uiText(UiText::Start) : currentBookTitle_;
+  }
+
+  return chapterMarkers_[chapterIndex].title;
+}
+
+String App::currentFooterMetricLabel() const {
+  if (footerMetricMode_ == FooterMetricMode::Percentage) {
+    return String(readingProgressPercent()) + "%";
+  }
+
+  const size_t wordCount = reader_.wordCount();
+  if (wordCount == 0) {
+    return "0%";
+  }
+
+  const size_t currentIndex = std::min(reader_.currentIndex(), wordCount - 1);
+  size_t endIndex = wordCount;
+
+  if (footerMetricMode_ == FooterMetricMode::ChapterTime) {
+    const size_t chapterIndex = currentChapterIndex();
+    if (chapterIndex < chapterMarkers_.size() && chapterIndex + 1 < chapterMarkers_.size()) {
+      endIndex = chapterMarkers_[chapterIndex + 1].wordIndex;
+    }
+    return String("CH ") +
+           formatReadingTimeRemaining(estimatedReadingTimeRemainingMs(currentIndex, endIndex));
+  }
+
+  return String("BOOK ") +
+         formatReadingTimeRemaining(estimatedReadingTimeRemainingMs(currentIndex, endIndex));
+}
+
+uint32_t App::estimatedReadingTimeRemainingMs(size_t startIndex, size_t endIndex) const {
+  const size_t wordCount = reader_.wordCount();
+  if (wordCount == 0) {
+    return 0;
+  }
+
+  startIndex = std::min(startIndex, wordCount - 1);
+  endIndex = std::min(endIndex, wordCount);
+  if (endIndex <= startIndex) {
+    return 0;
+  }
+
+  const size_t remainingWords = endIndex - startIndex;
+  return static_cast<uint32_t>((static_cast<uint64_t>(remainingWords) * 60000ULL) /
+                               static_cast<uint64_t>(reader_.wpm()));
+}
+
+String App::formatReadingTimeRemaining(uint32_t remainingMs) const {
+  const uint32_t totalSeconds = remainingMs / 1000UL;
+  if (totalSeconds < 60UL) {
+    return "<1m";
+  }
+
+  const uint32_t totalMinutes = totalSeconds / 60UL;
+  if (totalMinutes < 60UL) {
+    return String(totalMinutes) + "m";
+  }
+
+  const uint32_t totalHours = totalMinutes / 60UL;
+  const uint32_t minutes = totalMinutes % 60UL;
+  if (totalHours < 24UL) {
+    if (minutes == 0) {
+      return String(totalHours) + "h";
+    }
+    return String(totalHours) + "h" + String(minutes) + "m";
+  }
+
+  const uint32_t days = totalHours / 24UL;
+  const uint32_t hours = totalHours % 24UL;
+  if (hours == 0) {
+    return String(days) + "d";
+  }
+  return String(days) + "d" + String(hours) + "h";
 }
 
 uint8_t App::readingProgressPercent() const {
@@ -2527,9 +3273,10 @@ void App::renderReaderWord() {
   const bool showFooter = state_ != AppState::Playing;
   const String beforeText = phantomWordsEnabled_ ? phantomBeforeText() : "";
   const String afterText = phantomWordsEnabled_ ? phantomAfterText() : "";
+  const String footerMetricLabel = currentFooterMetricLabel();
   display_.renderPhantomRsvpWord(beforeText, reader_.currentWord(), afterText,
                                  readerFontSizeIndex_, currentChapterLabel(),
-                                 readingProgressPercent(), showFooter);
+                                 readingProgressPercent(), showFooter, footerMetricLabel);
 }
 
 bool App::isParagraphStart(size_t wordIndex) const {
@@ -2635,7 +3382,8 @@ void App::renderContextPreview() {
   contextViewVisible_ = true;
   display_.renderScrollView(contextPreviewWords_, currentReaderContentToken(),
                             contextPreviewStartIndex_, currentIndex, 0,
-                            currentChapterLabel(), readingProgressPercent(), "");
+                            currentChapterLabel(), readingProgressPercent(), "",
+                            currentFooterMetricLabel());
 }
 
 void App::renderScrollReader(uint32_t nowMs, const String &overlayText) {
@@ -2661,7 +3409,8 @@ void App::renderScrollReader(uint32_t nowMs, const String &overlayText) {
 
   display_.renderScrollView(contextPreviewWords_, currentReaderContentToken(),
                             contextPreviewStartIndex_, currentIndex, scrollProgressPermille,
-                            currentChapterLabel(), readingProgressPercent(), overlayText);
+                            currentChapterLabel(), readingProgressPercent(), overlayText,
+                            currentFooterMetricLabel());
 }
 
 void App::renderWpmFeedback(uint32_t nowMs) {
@@ -2675,9 +3424,11 @@ void App::renderWpmFeedback(uint32_t nowMs) {
   contextViewVisible_ = false;
   const String beforeText = phantomWordsEnabled_ ? phantomBeforeText() : "";
   const String afterText = phantomWordsEnabled_ ? phantomAfterText() : "";
+  const String footerMetricLabel = currentFooterMetricLabel();
   display_.renderPhantomRsvpWordWithWpm(beforeText, reader_.currentWord(), afterText,
                                         readerFontSizeIndex_, reader_.wpm(),
-                                        currentChapterLabel(), readingProgressPercent(), true);
+                                        currentChapterLabel(), readingProgressPercent(), true,
+                                        footerMetricLabel);
 }
 
 void App::renderStorageStatus(const char *title, const char *line1, const char *line2,

@@ -1,0 +1,15 @@
+# Optional advanced OTA override file.
+# The normal setup flow is now on-device: Settings -> Wi-Fi -> Choose network.
+# Copy this file to the SD card as /config/ota.conf only if you want a fallback
+# or want to override the default repo/asset settings.
+
+wifi_ssid=YourWiFiName
+wifi_password=YourWiFiPassword
+
+# Optional. Defaults point at the main RSVP Nano repo.
+# github_owner=ionutdecebal
+# github_repo=rsvpnano
+# asset_name=rsvp-nano-ota.bin
+
+# Optional. When true, the device checks the latest GitHub Release during boot.
+auto_check=false

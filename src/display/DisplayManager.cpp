@@ -1052,6 +1052,42 @@ String DisplayManager::fitSerifText(const String &text, int maxWidth, int diviso
   return fitted.isEmpty() ? ellipsis : fitted + ellipsis;
 }
 
+String DisplayManager::fitSerifTextScaled(const String &text, int maxWidth,
+                                          uint8_t scalePercent) const {
+  if (measureSerifTextWidthScaled(text, scalePercent) <= maxWidth) {
+    return text;
+  }
+
+  String fitted = text;
+  const String ellipsis = "...";
+  while (!fitted.isEmpty() &&
+         measureSerifTextWidthScaled(fitted + ellipsis, scalePercent) > maxWidth) {
+    fitted.remove(fitted.length() - 1);
+  }
+  while (!fitted.isEmpty() && fitted[fitted.length() - 1] == ' ') {
+    fitted.remove(fitted.length() - 1, 1);
+  }
+  return fitted.isEmpty() ? ellipsis : fitted + ellipsis;
+}
+
+String DisplayManager::fitSerifTextTrailingScaled(const String &text, int maxWidth,
+                                                  uint8_t scalePercent) const {
+  if (measureSerifTextWidthScaled(text, scalePercent) <= maxWidth) {
+    return text;
+  }
+
+  String fitted = text;
+  const String ellipsis = "...";
+  while (!fitted.isEmpty() &&
+         measureSerifTextWidthScaled(ellipsis + fitted, scalePercent) > maxWidth) {
+    fitted.remove(0, 1);
+  }
+  while (!fitted.isEmpty() && fitted[0] == ' ') {
+    fitted.remove(0, 1);
+  }
+  return fitted.isEmpty() ? ellipsis : ellipsis + fitted;
+}
+
 String DisplayManager::fitTinyText(const String &text, int maxWidth, int scale) const {
   if (measureTinyTextWidth(text, scale) <= maxWidth) {
     return text;
@@ -1066,6 +1102,22 @@ String DisplayManager::fitTinyText(const String &text, int maxWidth, int scale) 
     fitted.remove(fitted.length() - 1, 1);
   }
   return fitted.isEmpty() ? ellipsis : fitted + ellipsis;
+}
+
+String DisplayManager::fitTinyTextTrailing(const String &text, int maxWidth, int scale) const {
+  if (measureTinyTextWidth(text, scale) <= maxWidth) {
+    return text;
+  }
+
+  String fitted = text;
+  const String ellipsis = "...";
+  while (!fitted.isEmpty() && measureTinyTextWidth(ellipsis + fitted, scale) > maxWidth) {
+    fitted.remove(0, 1);
+  }
+  while (!fitted.isEmpty() && fitted[0] == ' ') {
+    fitted.remove(0, 1);
+  }
+  return fitted.isEmpty() ? ellipsis : ellipsis + fitted;
 }
 
 void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color) {
@@ -1373,17 +1425,17 @@ void DisplayManager::drawBatteryBadge() {
   drawTinyTextAt(batteryLabel_, x, kFooterMarginBottom, footerColor(), kTinyScale);
 }
 
-void DisplayManager::drawFooter(const String &chapterLabel, uint8_t progressPercent) {
-  const String percent = String(progressPercent) + "%";
+void DisplayManager::drawFooter(const String &chapterLabel, const String &statusLabel) {
+  const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
   const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom;
-  const int percentWidth = measureTinyTextWidth(percent, kTinyScale);
-  const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - percentWidth);
+  const int statusWidth = measureTinyTextWidth(status, kTinyScale);
+  const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - statusWidth);
   const int maxChapterWidth = std::max(0, rightX - kFooterMarginX - 18);
   const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
                                     maxChapterWidth, kTinyScale);
 
   drawTinyTextAt(chapter, kFooterMarginX, y, footerColor(), kTinyScale);
-  drawTinyTextAt(percent, rightX, y, footerColor(), kTinyScale);
+  drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawRsvpAnchorGuide(int anchorX, int textY, int textHeight) {
@@ -1620,11 +1672,12 @@ void DisplayManager::renderCenteredWord(const String &word, uint16_t color) {
 }
 
 void DisplayManager::renderRsvpWord(const String &word, const String &chapterLabel,
-                                    uint8_t progressPercent, bool showFooter) {
+                                    uint8_t progressPercent, bool showFooter,
+                                    const String &footerStatusLabel) {
   const String renderKey =
       "rsvp|" + word + "|" + chapterLabel + "|" + String(progressPercent) + "|" +
-      String(showFooter ? 1 : 0) + "|b:" + batteryLabel_ + "|d:" +
-      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel + "|b:" + batteryLabel_ +
+      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1644,7 +1697,8 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
   drawRsvpAnchorGuide(anchorX, y, glyphHeight);
   drawRsvpWordAt(word, x, y, focusIndex);
   if (showFooter) {
-    drawFooter(chapterLabel, progressPercent);
+    drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                         : footerStatusLabel);
   }
   drawBatteryBadge();
   flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -1652,12 +1706,13 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
 
 void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
                                            const String &chapterLabel, uint8_t progressPercent,
-                                           bool showFooter) {
+                                           bool showFooter, const String &footerStatusLabel) {
   const String wpmText = String(wpm) + " WPM";
   const String renderKey =
       "rsvp_wpm|" + word + "|" + wpmText + "|" + chapterLabel + "|" +
-      String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|b:" + batteryLabel_ +
-      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel +
+      "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+      String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1680,7 +1735,8 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
   drawRsvpWordAt(word, x, wordY, focusIndex);
   drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
   if (showFooter) {
-    drawFooter(chapterLabel, progressPercent);
+    drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                         : footerStatusLabel);
   }
   drawBatteryBadge();
   flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -1689,12 +1745,12 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
 void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const String &word,
                                            const String &afterText, uint8_t fontSizeLevel,
                                            const String &chapterLabel, uint8_t progressPercent,
-                                           bool showFooter) {
+                                           bool showFooter, const String &footerStatusLabel) {
   const String renderKey =
       "rsvp_phantom|" + beforeText + "|" + word + "|" + afterText + "|s:" +
       String(fontSizeLevel) + "|" + chapterLabel + "|" + String(progressPercent) + "|" +
-      String(showFooter ? 1 : 0) + "|b:" + batteryLabel_ + "|d:" +
-      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel + "|b:" + batteryLabel_ +
+      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1729,7 +1785,8 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
       drawSerif70TextAt(afterText, afterX, textY, phantomColor);
     }
     if (showFooter) {
-      drawFooter(chapterLabel, progressPercent);
+      drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                           : footerStatusLabel);
     }
     drawBatteryBadge();
     flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -1767,7 +1824,8 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     drawSerifTextScaledAt(afterText, afterX, textY, phantomColor, style.scalePercent);
   }
   if (showFooter) {
-    drawFooter(chapterLabel, progressPercent);
+    drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                         : footerStatusLabel);
   }
   drawBatteryBadge();
   flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -1883,7 +1941,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
       drawTinyTextCentered(overlayText, overlayY, focusColor(), kTinyScale);
     }
     if (showFooter) {
-      drawFooter(chapterLabel, progressPercent);
+      drawFooter(chapterLabel, String(progressPercent) + "%");
     }
     if (!canUseBandOnly) {
       drawBatteryBadge();
@@ -1964,7 +2022,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
     drawTinyTextCentered(overlayText, overlayY, focusColor(), kTinyScale);
   }
   if (showFooter) {
-    drawFooter(chapterLabel, progressPercent);
+    drawFooter(chapterLabel, String(progressPercent) + "%");
   }
   if (!canUseBandOnly) {
     drawBatteryBadge();
@@ -2081,13 +2139,15 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
 void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, const String &word,
                                                   const String &afterText, uint8_t fontSizeLevel,
                                                   uint16_t wpm, const String &chapterLabel,
-                                                  uint8_t progressPercent, bool showFooter) {
+                                                  uint8_t progressPercent, bool showFooter,
+                                                  const String &footerStatusLabel) {
   const String wpmText = String(wpm) + " WPM";
   const String renderKey =
       "rsvp_phantom_wpm|" + beforeText + "|" + word + "|" + afterText + "|s:" +
       String(fontSizeLevel) + "|" + wpmText + "|" + chapterLabel + "|" +
-      String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|b:" + batteryLabel_ +
-      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel +
+      "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+      String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -2125,7 +2185,8 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     }
     drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
     if (showFooter) {
-      drawFooter(chapterLabel, progressPercent);
+      drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                           : footerStatusLabel);
     }
     drawBatteryBadge();
     flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -2166,7 +2227,8 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
   }
   drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
   if (showFooter) {
-    drawFooter(chapterLabel, progressPercent);
+    drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                         : footerStatusLabel);
   }
   drawBatteryBadge();
   flushScaledFrame(scale, virtualWidth, virtualHeight);
@@ -2176,9 +2238,10 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
                                       size_t windowStartIndex, size_t currentWordIndex,
                                       uint16_t scrollProgressPermille,
                                       const String &chapterLabel, uint8_t progressPercent,
-                                      const String &overlayText) {
+                                      const String &overlayText,
+                                      const String &footerStatusLabel) {
   if (words.empty()) {
-    renderRsvpWord("", chapterLabel, progressPercent, true);
+    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel);
     return;
   }
 
@@ -2192,6 +2255,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
   const int overlayReserve = overlayText.isEmpty() ? 0 : (kTinyGlyphHeight * kTinyScale + 6);
+  const int textTop = kScrollTop;
   const int textBottom =
       virtualHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom - 6 - overlayReserve;
   const ReaderTypeface contextTypeface = currentReaderTypeface();
@@ -2265,7 +2329,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   }
 
   if (lines.empty()) {
-    renderRsvpWord("", chapterLabel, progressPercent, true);
+    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel);
     return;
   }
 
@@ -2278,8 +2342,8 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
 
   std::vector<int> lineTops;
   lineTops.reserve(lines.size());
-  int contentBottom = kScrollTop + contextGlyphHeight;
-  int y = kScrollTop;
+  int contentBottom = textTop + contextGlyphHeight;
+  int y = textTop;
   for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
     if (lineIndex != 0 && lines[lineIndex].paragraphStart) {
       y += kScrollParagraphGap;
@@ -2294,7 +2358,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const int focusCenterY =
       currentCenterY +
       (((nextCenterY - currentCenterY) * static_cast<int>(scrollProgressPermille)) / 1000);
-  const int preferredFocusY = kScrollTop + ((textBottom - kScrollTop) / 2);
+  const int preferredFocusY = textTop + ((textBottom - textTop) / 2);
   int scrollOffset = preferredFocusY - focusCenterY;
   const int minScrollOffset = std::min(0, textBottom - contentBottom);
   scrollOffset = std::max(minScrollOffset, std::min(0, scrollOffset));
@@ -2302,8 +2366,9 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const String renderKey =
       "scroll|" + String(contentToken) + "|" + String(windowStartIndex) + "|" +
       String(currentWordIndex) + "|" + String(words.size()) + "|" + String(scrollOffset) +
-      "|" + chapterLabel + "|" + String(progressPercent) + "|o:" + overlayText + "|b:" +
-      batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      "|" + chapterLabel + "|" + String(progressPercent) + "|o:" + overlayText + "|f:" +
+      footerStatusLabel + "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+      String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -2340,7 +2405,8 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
                          focusColor(), kTinyScale);
   }
 
-  drawFooter(chapterLabel, progressPercent);
+  drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
+                                                       : footerStatusLabel);
   drawBatteryBadge();
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
@@ -2499,6 +2565,141 @@ void DisplayManager::renderLibrary(const std::vector<LibraryItem> &items, size_t
     drawTinyTextAt(title, kLibraryInsetX, rowY + kLibraryTitleYOffset, titleColor, kTinyScale);
     drawTinyTextAt(fitTinyText(item.subtitle, maxWidth, kTinyScale), kLibraryInsetX,
                    rowY + kLibrarySubtitleYOffset, subtitleColor, kTinyScale);
+  }
+
+  drawBatteryBadge();
+  flushScaledFrame(scale, virtualWidth, virtualHeight);
+}
+
+void DisplayManager::renderTextEntry(const String &title, const String &prompt, const String &value,
+                                     const String &helperText,
+                                     const std::vector<Button> &buttons) {
+  String renderKey = "text-entry|";
+  renderKey += title;
+  renderKey += "|";
+  renderKey += prompt;
+  renderKey += "|";
+  renderKey += value;
+  renderKey += "|";
+  renderKey += helperText;
+  renderKey += "|b:";
+  renderKey += batteryLabel_;
+  renderKey += "|d:";
+  renderKey += String(darkMode_ ? 1 : 0);
+  renderKey += "|n:";
+  renderKey += String(nightMode_ ? 1 : 0);
+  for (const Button &button : buttons) {
+    renderKey += "|";
+    renderKey += button.label;
+    renderKey += "@";
+    renderKey += String(button.x);
+    renderKey += ",";
+    renderKey += String(button.y);
+    renderKey += ",";
+    renderKey += String(button.width);
+    renderKey += ",";
+    renderKey += String(button.height);
+    renderKey += ",";
+    renderKey += String(button.accent ? 1 : 0);
+    renderKey += ",";
+    renderKey += String(button.active ? 1 : 0);
+  }
+
+  if (!initialized_ || renderKey == lastRenderKey_) {
+    return;
+  }
+
+  lastRenderKey_ = renderKey;
+
+  const int scale = 1;
+  const int virtualWidth = kDisplayWidth;
+  const int virtualHeight = kDisplayHeight;
+  const String headerText = title.isEmpty() ? helperText : title;
+  const int headerY = 4;
+  const int fieldX = 10;
+  const int fieldY = headerText.isEmpty() ? 8 : 14;
+  const int fieldWidth = virtualWidth - 20;
+  const int fieldHeight = 28;
+  constexpr uint8_t kFieldTextScalePercent = 36;
+  const int fieldTextHeight = scaledPercentDimension(
+      baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(value.isEmpty() ? prompt : value)),
+      kFieldTextScalePercent);
+  const int fieldTextY = fieldY + std::max(1, (fieldHeight - fieldTextHeight) / 2);
+
+  clearVirtualBuffer(virtualWidth, virtualHeight);
+
+  if (!headerText.isEmpty()) {
+    drawTinyTextCentered(fitTinyText(headerText, virtualWidth - 20, 1), headerY, footerColor(), 1);
+  }
+
+  fillVirtualRect(fieldX, fieldY, fieldWidth, fieldHeight, dimColor());
+  fillVirtualRect(fieldX + 1, fieldY + 1, fieldWidth - 2, fieldHeight - 2, backgroundColor());
+  if (value.isEmpty()) {
+    if (!prompt.isEmpty()) {
+      const String placeholder =
+          fitSerifTextScaled(prompt, fieldWidth - 16, kFieldTextScalePercent);
+      drawSerifTextScaledAt(placeholder, fieldX + 8, fieldTextY, dimColor(), kFieldTextScalePercent);
+    }
+  } else {
+    const String fieldValue =
+        fitSerifTextTrailingScaled(value, fieldWidth - 16, kFieldTextScalePercent);
+    drawSerifTextScaledAt(fieldValue, fieldX + 8, fieldTextY, wordColor(), kFieldTextScalePercent);
+  }
+
+  for (const Button &button : buttons) {
+    if (button.width <= 2 || button.height <= 2) {
+      continue;
+    }
+
+    const uint16_t borderColor =
+        button.active ? selectedBarColor() : (button.accent ? focusColor() : dimColor());
+    uint16_t fillColor = backgroundColor();
+    if (button.active) {
+      fillColor = blendOverBackground(borderColor, nightMode_ ? 128 : 40);
+    } else if (button.accent) {
+      fillColor = blendOverBackground(borderColor, nightMode_ ? 92 : 24);
+    }
+
+    fillVirtualRect(button.x, button.y, button.width, button.height, borderColor);
+    fillVirtualRect(button.x + 1, button.y + 1, button.width - 2, button.height - 2, fillColor);
+
+    const bool singleAsciiLetter =
+        button.label.length() == 1 &&
+        ((button.label[0] >= 'a' && button.label[0] <= 'z') ||
+         (button.label[0] >= 'A' && button.label[0] <= 'Z'));
+    const uint8_t labelScalePercent = singleAsciiLetter ? 42 : 26;
+    const String label =
+        fitSerifTextScaled(button.label, std::max(0, static_cast<int>(button.width) - 8),
+                           labelScalePercent);
+    const int labelWidth = measureSerifTextWidthScaled(label, labelScalePercent);
+    const int labelHeight = scaledPercentDimension(
+        baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(label)), labelScalePercent);
+    const int textX =
+        static_cast<int>(button.x) + std::max(0, (static_cast<int>(button.width) - labelWidth) / 2);
+    const int textY =
+        static_cast<int>(button.y) +
+        std::max(1, (static_cast<int>(button.height) - labelHeight) / 2);
+    if (singleAsciiLetter) {
+      drawSerifTextScaledAt(label, textX, textY, wordColor(), labelScalePercent);
+      continue;
+    }
+
+    if (!label.isEmpty()) {
+      drawSerifTextScaledAt(label, textX, textY, wordColor(), labelScalePercent);
+      continue;
+    }
+
+    const int fallbackScale = kTinyScale;
+    const String fallbackLabel =
+        fitTinyText(button.label, std::max(0, static_cast<int>(button.width) - 6), fallbackScale);
+    const int fallbackWidth = measureTinyTextWidth(fallbackLabel, fallbackScale);
+    const int fallbackX = static_cast<int>(button.x) +
+                          std::max(0, (static_cast<int>(button.width) - fallbackWidth) / 2);
+    const int fallbackY = static_cast<int>(button.y) +
+                          std::max(1, (static_cast<int>(button.height) -
+                                       (kTinyGlyphHeight * fallbackScale)) /
+                                          2);
+    drawTinyTextAt(fallbackLabel, fallbackX, fallbackY, wordColor(), fallbackScale);
   }
 
   drawBatteryBadge();

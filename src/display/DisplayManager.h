@@ -31,6 +31,16 @@ class DisplayManager {
     String subtitle;
   };
 
+  struct Button {
+    String label;
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint16_t width = 0;
+    uint16_t height = 0;
+    bool accent = false;
+    bool active = false;
+  };
+
   ~DisplayManager();
 
   bool begin();
@@ -46,23 +56,28 @@ class DisplayManager {
   bool wakeFromSleep();
   void renderCenteredWord(const String &word, uint16_t color = 0xFFFF);
   void renderRsvpWord(const String &word, const String &chapterLabel = "",
-                      uint8_t progressPercent = 0, bool showFooter = true);
+                      uint8_t progressPercent = 0, bool showFooter = true,
+                      const String &footerStatusLabel = "");
   void renderRsvpWordWithWpm(const String &word, uint16_t wpm, const String &chapterLabel = "",
-                             uint8_t progressPercent = 0, bool showFooter = true);
+                             uint8_t progressPercent = 0, bool showFooter = true,
+                             const String &footerStatusLabel = "");
   void renderPhantomRsvpWord(const String &beforeText, const String &word, const String &afterText,
                              uint8_t fontSizeLevel, const String &chapterLabel = "",
-                             uint8_t progressPercent = 0, bool showFooter = true);
+                             uint8_t progressPercent = 0, bool showFooter = true,
+                             const String &footerStatusLabel = "");
   void renderPhantomRsvpWordWithWpm(const String &beforeText, const String &word,
                                     const String &afterText, uint8_t fontSizeLevel, uint16_t wpm,
                                     const String &chapterLabel = "",
-                                    uint8_t progressPercent = 0, bool showFooter = true);
+                                    uint8_t progressPercent = 0, bool showFooter = true,
+                                    const String &footerStatusLabel = "");
   void renderTypographyPreview(const String &beforeText, const String &word, const String &afterText,
                                uint8_t fontSizeLevel, const String &title,
                                const String &line1 = "", const String &line2 = "");
   void renderScrollView(const std::vector<ContextWord> &words, uint32_t contentToken,
                         size_t windowStartIndex, size_t currentWordIndex,
                         uint16_t scrollProgressPermille = 0, const String &chapterLabel = "",
-                        uint8_t progressPercent = 0, const String &overlayText = "");
+                        uint8_t progressPercent = 0, const String &overlayText = "",
+                        const String &footerStatusLabel = "");
   void renderWordTickerView(const std::vector<ContextWord> &words, size_t currentWordIndex,
                             uint8_t fontSizeLevel, uint16_t motionPermille = 0,
                             const String &chapterLabel = "", uint8_t progressPercent = 0,
@@ -70,6 +85,8 @@ class DisplayManager {
   void renderMenu(const char *const *items, size_t itemCount, size_t selectedIndex);
   void renderMenu(const std::vector<String> &items, size_t selectedIndex);
   void renderLibrary(const std::vector<LibraryItem> &items, size_t selectedIndex);
+  void renderTextEntry(const String &title, const String &prompt, const String &value,
+                       const String &helperText, const std::vector<Button> &buttons);
   void renderStatus(const String &title, const String &line1 = "", const String &line2 = "");
   void renderProgress(const String &title, const String &line1 = "", const String &line2 = "",
                       int progressPercent = -1);
@@ -94,7 +111,10 @@ class DisplayManager {
   int measureSerifTextWidthScaled(const String &text, uint8_t scalePercent) const;
   int measureTinyTextWidth(const String &text, int scale) const;
   String fitSerifText(const String &text, int maxWidth, int divisor) const;
+  String fitSerifTextScaled(const String &text, int maxWidth, uint8_t scalePercent) const;
+  String fitSerifTextTrailingScaled(const String &text, int maxWidth, uint8_t scalePercent) const;
   String fitTinyText(const String &text, int maxWidth, int scale) const;
+  String fitTinyTextTrailing(const String &text, int maxWidth, int scale) const;
   void drawGlyph(int x, int y, char c, uint16_t color);
   void drawGlyph(int x, int y, char c, uint16_t color, ReaderTypeface typeface);
   void drawSerifGlyphScaled(int x, int y, char c, uint16_t color, int divisor);
@@ -114,7 +134,7 @@ class DisplayManager {
   void drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale);
   void drawTinyTextCentered(const String &text, int y, uint16_t color, int scale);
   void drawBatteryBadge();
-  void drawFooter(const String &chapterLabel, uint8_t progressPercent);
+  void drawFooter(const String &chapterLabel, const String &statusLabel);
   void drawRsvpAnchorGuide(int anchorX, int textY, int textHeight);
   void drawWordAt(const String &word, int x, int y, uint16_t color);
   void drawRsvpWordAt(const String &word, int x, int y, int focusIndex);

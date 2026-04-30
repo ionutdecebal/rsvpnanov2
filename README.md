@@ -13,6 +13,7 @@ RSVP Nano is an open-source ESP32-S3 reading device for showing text one word at
 - Chapter and paragraph-aware navigation.
 - SD card library under `/books`.
 - Web-first book conversion and SD-card library sync from the browser flasher.
+- Optional GitHub Release OTA updates over Wi-Fi with on-device network setup and touch keyboard entry.
 - USB mass-storage mode for copying books to the SD card.
 - Browser-based firmware installation plus in-browser library conversion, sidecar cleanup, and SD-card sync.
 
@@ -89,6 +90,38 @@ If a conversion is interrupted, you may see sidecar files such as:
 .rsvp.failed
 ```
 
+### OTA Updates
+
+The firmware can optionally check GitHub Releases over Wi-Fi and install a newer app build without
+erasing your reader settings or saved reading progress. Settings and progress are stored in ESP32
+`Preferences`, so a normal OTA update keeps them intact.
+
+To enable OTA on the device:
+
+1. Open `Settings -> Wi-Fi`.
+2. Tap `Choose network`.
+3. Pick an SSID from the scanned list.
+4. Enter the password on the on-device keyboard.
+5. Optionally turn on `Auto OTA`.
+
+After that, open `Settings -> Firmware update` to manually check the latest published GitHub
+Release and install `rsvp-nano-ota.bin` if the release tag is newer than the firmware already on
+the device.
+
+The selected Wi-Fi network and password are stored in ESP32 `Preferences`, so normal OTA updates
+keep them alongside your reader settings and saved book progress.
+
+[`docs/ota.conf.example`](docs/ota.conf.example) is still supported as an optional advanced
+override or fallback. You can copy it to the SD card as `/config/ota.conf` if you want to
+pre-seed Wi-Fi credentials or change the default repo/asset settings.
+
+Optional keys let you override the default repo or asset name:
+
+- `github_owner`
+- `github_repo`
+- `asset_name`
+- `auto_check`
+
 ## User Guide
 
 Most reader settings and your current reading position are saved automatically.
@@ -103,6 +136,8 @@ Most reader settings and your current reading position are saved automatically.
 - `PWR` hold: power the device off.
 
 ### Reader Shortcuts
+
+- Tap the bottom-right footer label: cycle between book progress percent, chapter time left, and book time left.
 
 #### RSVP Mode
 
@@ -177,12 +212,19 @@ Main Menu
 |  |  |- Guide width
 |  |  |- Guide gap
 |  |  `- Reset
-|  `- Word pacing
+|  |- Word pacing
 |     |- Back
 |     |- Long words
 |     |- Complexity
 |     |- Punctuation
 |     `- Reset pacing
+|  |- Wi-Fi
+|     |- Back
+|     |- Network
+|     |- Choose network
+|     |- Auto OTA
+|     `- Forget network
+|  `- Firmware update
 |- USB transfer (default USB build)
 `- Power off
 ```
@@ -215,6 +257,18 @@ Main Menu
 - `Punctuation`: add extra delay around sentence rhythm and punctuation.
 - `Reset pacing`: restore pacing delays to their defaults.
 
+#### Wi-Fi
+
+- `Network`: shows the currently saved SSID and also acts as a shortcut into a fresh scan.
+- `Choose network`: scan nearby SSIDs and open the on-device keyboard for secure networks.
+- `Auto OTA`: check `releases/latest` during boot when Wi-Fi credentials are available.
+- `Forget network`: clear the stored Wi-Fi credentials from `Preferences`.
+
+#### Firmware Update
+
+- `Firmware update`: use the saved Wi-Fi credentials, check the latest GitHub Release, and install
+  `rsvp-nano-ota.bin` when a newer release is available.
+
 ### USB Transfer
 
 On the default USB-enabled firmware build, open `USB transfer` from the main menu to expose the SD
@@ -238,7 +292,7 @@ The default environment is `waveshare_esp32s3_usb_msc`, which includes the reade
 
 Serial monitor runs at `115200`.
 
-To export the merged binary used by the browser flasher:
+To export the browser-flasher image and the OTA binary:
 
 ```sh
 python3 tools/export_web_firmware.py
@@ -248,7 +302,22 @@ That command writes:
 
 ```text
 web/firmware/rsvp-nano.bin
+web/firmware/rsvp-nano-ota.bin
 ```
+
+`rsvp-nano.bin` is the merged browser-flasher image.
+`rsvp-nano-ota.bin` is the app-only binary to upload as a GitHub Release asset.
+
+For OTA releases:
+
+1. Build from a clean commit or tag. Tagged builds are recommended so the firmware version matches
+   the release tag.
+2. Run `python3 tools/export_web_firmware.py`.
+3. Create a GitHub Release in `ionutdecebal/rsvpnano`.
+4. Upload `web/firmware/rsvp-nano-ota.bin` to that release.
+
+The device checks `releases/latest`, compares the release tag to its built-in firmware version,
+and only downloads the OTA asset when the release tag is newer.
 
 ## Hardware
 
