@@ -61,7 +61,12 @@
       }
 
       .intro {
-        padding: clamp(28px, 6vw, 58px);
+        text-align: center;
+        padding: 4px;
+        margin-bottom: -28px;
+        position: relative;
+        z-index: 0;
+        opacity: 0.45;
       }
 
       .eyebrow {
@@ -73,42 +78,165 @@
       }
 
       h1 {
-        max-width: 11ch;
         margin: 0;
         font-size: clamp(3.3rem, 10vw, 7.5rem);
         line-height: 0.86;
         letter-spacing: -0.075em;
       }
 
-      .lead {
-        max-width: 56ch;
-        margin: 28px 0 0;
+      .install-steps {
+        overflow: hidden;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        padding: 20px 18px 18px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .section-header h2 {
+        flex: 1;
+        margin: 0;
+        padding: 0;
+        font-size: 1.05rem;
+      }
+
+      .flash-history {
+        margin-left: auto;
+        font: 0.78rem/1 ui-sans-serif, system-ui, sans-serif;
         color: var(--muted);
-        font-size: clamp(1.05rem, 2vw, 1.32rem);
-        line-height: 1.55;
+      }
+
+      .flash-history:empty {
+        display: none;
+      }
+
+      .chevron {
+        width: 20px;
+        height: 20px;
+        color: var(--muted);
+        transition: transform 200ms ease;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+
+      .install-steps.is-collapsed .chevron,
+      .workspace.is-collapsed .chevron {
+        transform: rotate(-90deg);
+      }
+
+      .section-body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+        border-top: 1px solid var(--line);
+        transition: grid-template-rows 200ms ease;
+        grid-template-rows: 1fr;
+      }
+
+      .install-steps.is-collapsed .section-body {
+        grid-template-rows: 0fr;
+        border-top-color: transparent;
+      }
+
+      .section-body-inner {
+        overflow: hidden;
+        padding: 18px;
+      }
+
+      .install-steps.is-collapsed .section-body-inner {
+        padding-top: 0;
+        padding-bottom: 0;
       }
 
       .install {
         padding: 28px;
       }
 
+      .install-option-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .latest-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font: 700 0.76rem/1 ui-sans-serif, system-ui, sans-serif;
+        color: #2f5d32;
+      }
+
+      .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4c7a4a;
+        box-shadow: 0 0 0 0 rgba(76, 122, 74, 0.5);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(76, 122, 74, 0.5); }
+        70% { box-shadow: 0 0 0 6px rgba(76, 122, 74, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(76, 122, 74, 0); }
+      }
+
+      .feature-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .feature-list li::before {
+        content: "✓";
+        margin-right: 6px;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.7em;
+        height: 1.7em;
+        margin-right: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fffaf1;
+        font: 800 0.82rem/1 ui-sans-serif, system-ui, sans-serif;
+        vertical-align: middle;
+        flex-shrink: 0;
+      }
+
       .install h2,
-      .steps h2 {
-        margin: 0 0 10px;
-        font-size: 1.2rem;
+      .steps h2,
+      .workspace h2 {
+        display: flex;
+        align-items: center;
+        margin: 0;
+        font-size: 1.38rem;
       }
 
       .install p,
       .steps p,
+      .section-body-inner p,
       li {
         color: var(--muted);
         line-height: 1.5;
       }
 
+      p {
+        margin: 0 0 1em;
+      }
+
       .install-option {
         display: grid;
         gap: 12px;
-        margin-top: 22px;
+        margin-top: 0;
         padding: 18px;
         border: 1px solid var(--line);
         border-radius: 20px;
@@ -151,8 +279,9 @@
       }
 
       .steps {
-        margin-top: 28px;
         padding: 28px;
+        border-left: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06));
       }
 
       .workspace {
@@ -164,10 +293,25 @@
       .workspace-shell {
         display: grid;
         grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+        border-top: 1px solid var(--line);
+        transition: grid-template-rows 200ms ease;
+        grid-template-rows: 1fr;
+      }
+
+      .workspace.is-collapsed .workspace-shell {
+        grid-template-rows: 0fr;
+        border-top-color: transparent;
       }
 
       .workspace-pane {
         padding: 28px;
+        overflow: hidden;
+        transition: padding 200ms ease;
+      }
+
+      .workspace.is-collapsed .workspace-pane {
+        padding-top: 0;
+        padding-bottom: 0;
       }
 
       .workspace-pane + .workspace-pane {
@@ -178,10 +322,6 @@
       .workspace h2,
       .workspace h3 {
         margin: 0;
-      }
-
-      .workspace h2 {
-        font-size: 1.38rem;
       }
 
       .workspace-copy {
@@ -475,6 +615,10 @@
       }
 
       @media (max-width: 980px) {
+        .section-body {
+          grid-template-columns: 1fr;
+        }
+
         .workspace-shell {
           grid-template-columns: 1fr;
         }
@@ -491,7 +635,7 @@
           padding-top: 18px;
         }
 
-        .hero {
+        .section-body {
           grid-template-columns: 1fr;
         }
 
@@ -499,12 +643,10 @@
           grid-template-columns: 1fr;
         }
 
-        .intro,
         .install,
         .steps,
         .workspace-pane {
           padding: 22px;
-          border-radius: 22px;
         }
       }
 
@@ -566,51 +708,69 @@
   </head>
   <body>
     <main>
-      <section class="hero">
-        <div class="card intro">
-          <p class="eyebrow">Browser firmware installer</p>
-          <h1>RSVP Nano</h1>
-          <p class="lead">
-            Flash the reader from Chrome or Edge without installing VS Code, PlatformIO,
-            or command-line tools. Connect the device by USB, click install,
-            and let the browser write it directly to the ESP32-S3.
-          </p>
+      <div class="intro">
+        <p class="eyebrow">Browser firmware installer</p>
+        <h1>RSVP Nano</h1>
+      </div>
+
+      <section class="card install-steps" id="install-section">
+        <div class="section-header" id="install-toggle">
+          <h2><span class="step-number">1</span>Install Firmware</h2>
+          <span class="flash-history" id="flash-history"></span>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
 
-        <div class="card install">
-          <h2>Install Firmware</h2>
-          <p>The hosted installer tracks the latest official release, including the reader and USB SD-card transfer support.</p>
-
-          <div class="install-option">
-            <strong>RSVP Nano firmware</strong>
-            <span>Main reader firmware with on-device EPUB conversion and USB SD-card transfer mode.</span>
-            <esp-web-install-button manifest="firmware/manifest.json">
-              <button slot="activate">Install Firmware</button>
-              <span slot="unsupported">Use Chrome or Edge on desktop with Web Serial support.</span>
-              <span slot="not-allowed">This page must be opened over HTTPS or localhost.</span>
-            </esp-web-install-button>
+        <div class="section-body">
+          <div class="section-body-inner">
+            <p>Flashing takes under a minute.<br>Put the device in boot mode first:</p>
+            <ol>
+              <li>Turn the device off</li>
+              <li>Keep pressed <code>BOOT</code> (sun icon button)</li>
+              <li>Connect the USB cable</li>
+            </ol>
           </div>
 
-          <div class="warning">
-            Flashing replaces the firmware on the connected ESP32-S3. Keep the device plugged in
-            until the installer says it is finished.
+          <div class="section-body-inner">
+            <div class="install-option">
+              <div class="install-option-head">
+                <strong>Version 1.0.3</strong>
+                <span class="latest-badge"><span class="pulse-dot"></span>Latest Release</span>
+              </div>
+              <ul class="feature-list">
+                <li>On-device EPUB conversion</li>
+                <li>USB SD-card transfer mode</li>
+                <li>Extended-Latin character support</li>
+              </ul>
+              <esp-web-install-button manifest="firmware/manifest.json">
+                <button slot="activate">Install Firmware</button>
+                <span slot="unsupported">Use Chrome or Edge on desktop with Web Serial support.</span>
+                <span slot="not-allowed">This page must be opened over HTTPS or localhost.</span>
+              </esp-web-install-button>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="card steps">
-        <h2>Before You Click Install</h2>
-        <ol>
-          <li>Connect the device with a USB data cable.</li>
-          <li>If the installer cannot connect, hold <code>BOOT</code>, tap reset or power-cycle, then try again.</li>
-          <li>After flashing, place books on the SD card under <code>/books</code>.</li>
-        </ol>
+      <section class="card install-steps" id="sdcard-section">
+        <div class="section-header" id="sdcard-toggle">
+          <h2><span class="step-number">2</span>Prepare SD Card</h2>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="section-body">
+          <div class="section-body-inner">
+            <p>Instructions coming soon.</p>
+          </div>
+        </div>
       </section>
 
-      <section class="card workspace">
+      <section class="card workspace" id="workspace-section">
+        <div class="section-header" id="workspace-toggle">
+          <h2><span class="step-number">3</span>Library Workspace</h2>
+          <span class="flash-history" id="workspace-summary-header"></span>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
         <div class="workspace-shell">
           <div class="workspace-pane">
-            <h2>Library Workspace</h2>
             <p class="workspace-copy">
               Bring books into the browser, convert them into <code>.rsvp</code>, and sync the
               results back into the SD card&rsquo;s <code>/books</code> folder without leaving this page.
@@ -730,6 +890,102 @@
           document.getElementById("compat-modal").hidden = true;
         });
       }
+
+      document.getElementById("install-toggle").addEventListener("click", function () {
+        document.getElementById("install-section").classList.toggle("is-collapsed");
+      });
+
+      document.getElementById("sdcard-toggle").addEventListener("click", function () {
+        document.getElementById("sdcard-section").classList.toggle("is-collapsed");
+      });
+
+      document.getElementById("workspace-toggle").addEventListener("click", function () {
+        document.getElementById("workspace-section").classList.toggle("is-collapsed");
+      });
+
+      // Flash history tracking
+      var FLASH_KEY = "rsvpnano_last_flash";
+      var FLASH_VERSION = "1.0.3";
+
+      function timeAgo(ts) {
+        var s = Math.floor((Date.now() - ts) / 1000);
+        if (s < 60) return "just now";
+        var m = Math.floor(s / 60);
+        if (m < 60) return m + (m === 1 ? " minute ago" : " minutes ago");
+        var h = Math.floor(m / 60);
+        if (h < 24) return h + (h === 1 ? " hour ago" : " hours ago");
+        var d = Math.floor(h / 24);
+        return d + (d === 1 ? " day ago" : " days ago");
+      }
+
+      function showFlashHistory() {
+        var el = document.getElementById("flash-history");
+        try {
+          var data = JSON.parse(localStorage.getItem(FLASH_KEY));
+          if (data && data.timestamp) {
+            el.textContent = "v" + data.version + " flashed " + timeAgo(data.timestamp);
+          } else {
+            el.textContent = "No installations in history";
+          }
+        } catch (e) {
+          el.textContent = "No installations in history";
+        }
+      }
+
+      showFlashHistory();
+
+      // Collapse install section for returning users
+      (function () {
+        try {
+          var data = JSON.parse(localStorage.getItem(FLASH_KEY));
+          if (data && data.timestamp) {
+            document.getElementById("install-section").classList.add("is-collapsed");
+          }
+        } catch (e) {}
+      })();
+
+      (function () {
+        try {
+          var data = JSON.parse(localStorage.getItem(FLASH_KEY));
+          if (data && data.version && data.version !== FLASH_VERSION) {
+            var btn = document.querySelector('button[slot="activate"]');
+            if (btn) btn.textContent = "Update Firmware";
+          }
+        } catch (e) {}
+      })();
+
+      new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          m.addedNodes.forEach(function (node) {
+            if (node.nodeName !== "EWT-INSTALL-DIALOG") return;
+
+            var saved = false;
+            var pollTimer = setInterval(function () {
+              if (!document.body.contains(node)) {
+                clearInterval(pollTimer);
+                return;
+              }
+              if (saved) return;
+              try {
+                var shadow = node.shadowRoot;
+                if (!shadow) return;
+                var text = shadow.textContent || "";
+                if (text.indexOf("Installation complete") !== -1) {
+                  saved = true;
+                  clearInterval(pollTimer);
+                  localStorage.setItem(FLASH_KEY, JSON.stringify({
+                    version: FLASH_VERSION,
+                    timestamp: Date.now()
+                  }));
+                  showFlashHistory();
+                }
+              } catch (e) {}
+            }, 500);
+
+            setTimeout(function () { clearInterval(pollTimer); }, 600000);
+          });
+        });
+      }).observe(document.body, { childList: true });
     </script>
   </body>
 </html>
