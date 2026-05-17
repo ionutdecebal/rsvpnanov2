@@ -79,7 +79,7 @@ internal class RsvpWriter(
         val body = lines.joinToString("\n").trim() + "\n"
         return RsvpBookFile(
             filename = "${RsvpTextUtils.filenameSafe(title)}.rsvp",
-            data = body.toByteArray(Charsets.UTF_8),
+            data = body.encodeToByteArray(),
             title = title,
             wordCount = wordCount,
             chapterCount = maxOf(chapterCount, 1),

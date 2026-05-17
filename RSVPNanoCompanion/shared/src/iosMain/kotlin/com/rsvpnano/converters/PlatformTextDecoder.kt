@@ -1,16 +1,36 @@
 package com.rsvpnano.converters
 
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
+import platform.Foundation.NSData
+import platform.Foundation.NSString
+import platform.Foundation.NSStringEncoding
+import platform.Foundation.NSUTF16BigEndianStringEncoding
+import platform.Foundation.NSUTF16LittleEndianStringEncoding
+import platform.Foundation.NSUTF16StringEncoding
+
 internal actual object PlatformTextDecoder {
     actual fun decode(data: ByteArray, charsetName: String): String? {
+        if (data.isEmpty()) {
+            return ""
+        }
+
         return when (charsetName.lowercase()) {
-            "utf-8", "utf8" -> String(data, Charsets.UTF_8)
-            "utf-16", "utf16" -> String(data, Charsets.UTF_16)
-            "utf-16le" -> String(data, Charsets.UTF_16LE)
-            "utf-16be" -> String(data, Charsets.UTF_16BE)
+            "utf-8", "utf8" -> data.decodeToString()
+            "utf-16", "utf16" -> decodeWithEncoding(data, NSUTF16StringEncoding)
+            "utf-16le" -> decodeWithEncoding(data, NSUTF16LittleEndianStringEncoding)
+            "utf-16be" -> decodeWithEncoding(data, NSUTF16BigEndianStringEncoding)
             "iso-8859-1", "latin1" -> decodeLatin1(data)
             "windows-1252", "cp1252" -> decodeWindows1252(data)
             else -> null
         }
+    }
+
+    private fun decodeWithEncoding(data: ByteArray, encoding: NSStringEncoding): String? =
+        NSString.create(data = data.toNSData(), encoding = encoding)?.toString()
+
+    private fun ByteArray.toNSData(): NSData = usePinned { pinned ->
+        NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
     }
 
     private fun decodeLatin1(data: ByteArray): String = buildString(data.size) {
