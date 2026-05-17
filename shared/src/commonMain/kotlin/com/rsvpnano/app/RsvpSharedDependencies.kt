@@ -17,6 +17,10 @@ data class RsvpSharedDependencies(
     val pendingUploadStorage: PendingUploadStorage,
     val rssFeedStorage: RssFeedStorage,
 ) {
+    fun createApp(): RsvpSharedApp {
+        return RsvpSharedApp(this)
+    }
+
     fun createFacade(): RsvpSharedFacade {
         return RsvpSharedFacade(
             pendingUploadStore = PendingUploadJsonStore(pendingUploadStorage),
