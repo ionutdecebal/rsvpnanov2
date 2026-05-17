@@ -1,4 +1,4 @@
-name: CI - iOS (shared)
+name: CI - iOS
 
 on:
   push:
