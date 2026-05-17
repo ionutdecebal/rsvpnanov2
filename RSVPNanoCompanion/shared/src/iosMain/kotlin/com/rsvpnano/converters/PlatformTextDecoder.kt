@@ -1,14 +1,5 @@
 package com.rsvpnano.converters
 
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.usePinned
-import platform.Foundation.NSData
-import platform.Foundation.NSString
-import platform.Foundation.NSStringEncoding
-import platform.Foundation.NSUTF16BigEndianStringEncoding
-import platform.Foundation.NSUTF16LittleEndianStringEncoding
-import platform.Foundation.NSUTF16StringEncoding
-
 internal actual object PlatformTextDecoder {
     actual fun decode(data: ByteArray, charsetName: String): String? {
         if (data.isEmpty()) {
@@ -17,31 +8,61 @@ internal actual object PlatformTextDecoder {
 
         return when (charsetName.lowercase()) {
             "utf-8", "utf8" -> data.decodeToString()
-            "utf-16", "utf16" -> decodeWithEncoding(data, NSUTF16StringEncoding)
-            "utf-16le" -> decodeWithEncoding(data, NSUTF16LittleEndianStringEncoding)
-            "utf-16be" -> decodeWithEncoding(data, NSUTF16BigEndianStringEncoding)
+            "utf-16", "utf16" -> decodeUtf16(data)
+            "utf-16le" -> decodeUtf16LittleEndian(data)
+            "utf-16be" -> decodeUtf16BigEndian(data)
             "iso-8859-1", "latin1" -> decodeLatin1(data)
             "windows-1252", "cp1252" -> decodeWindows1252(data)
             else -> null
         }
     }
 
-    private fun decodeWithEncoding(data: ByteArray, encoding: NSStringEncoding): String? =
-        NSString.create(data = data.toNSData(), encoding = encoding)?.toString()
+    private fun decodeUtf16(data: ByteArray): String {
+        if (data.size >= 2) {
+            val first = data[0].toUnsignedInt()
+            val second = data[1].toUnsignedInt()
+            if (first == 0xfe && second == 0xff) {
+                return decodeUtf16BigEndian(data, offset = 2)
+            }
+            if (first == 0xff && second == 0xfe) {
+                return decodeUtf16LittleEndian(data, offset = 2)
+            }
+        }
+        return decodeUtf16BigEndian(data)
+    }
 
-    private fun ByteArray.toNSData(): NSData = usePinned { pinned ->
-        NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
+    private fun decodeUtf16LittleEndian(data: ByteArray, offset: Int = 0): String = decodeUtf16Units(data, offset) { index ->
+        data[index].toUnsignedInt() or (data[index + 1].toUnsignedInt() shl 8)
+    }
+
+    private fun decodeUtf16BigEndian(data: ByteArray, offset: Int = 0): String = decodeUtf16Units(data, offset) { index ->
+        (data[index].toUnsignedInt() shl 8) or data[index + 1].toUnsignedInt()
+    }
+
+    private fun decodeUtf16Units(
+        data: ByteArray,
+        offset: Int,
+        unitAt: (Int) -> Int,
+    ): String = buildString((data.size - offset) / 2) {
+        var index = offset
+        while (index + 1 < data.size) {
+            append(unitAt(index).toChar())
+            index += 2
+        }
     }
 
     private fun decodeLatin1(data: ByteArray): String = buildString(data.size) {
-        data.forEach { byte -> append((byte.toInt() and 0xff).toChar()) }
+        data.forEach { byte -> append(byte.toUnsignedInt().toChar()) }
     }
 
     private fun decodeWindows1252(data: ByteArray): String = buildString(data.size) {
         data.forEach { byte ->
-            append(windows1252Controls[byte.toInt() and 0xff] ?: (byte.toInt() and 0xff).toChar())
+            val value = byte.toUnsignedInt()
+            append(windows1252Controls[value] ?: value.toChar())
         }
     }
+
+    private fun Byte.toUnsignedInt(): Int = toInt() and 0xff
 
     private val windows1252Controls: Map<Int, Char> = mapOf(
         0x80 to '\u20ac',
