@@ -3,6 +3,7 @@
     <application
         android:label="RSVP Nano"
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"

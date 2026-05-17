@@ -33,3 +33,5 @@ drafts through shared article formatting, and can add/sync RSS feeds.
 Device API sync uses the shared `NanoClient`/sync interfaces and should stay thin in the Compose
 layer. The Android entry point creates the Ktor-backed device client through
 `createAndroidDeviceSyncService()`, while URL fetches use `createAndroidArticleFetchClient()`.
+The app permits cleartext HTTP because the reader exposes its companion API at `http://192.168.4.1`
+while in Companion sync mode.
