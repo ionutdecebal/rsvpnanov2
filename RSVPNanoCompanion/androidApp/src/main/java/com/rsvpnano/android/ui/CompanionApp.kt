@@ -2,13 +2,15 @@ package com.rsvpnano.android.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,19 +23,36 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.rsvpnano.app.NanoDeviceSyncService
 import com.rsvpnano.app.RsvpSharedApp
+import com.rsvpnano.app.createAndroidArticleFetchClient
+import com.rsvpnano.app.createAndroidDeviceSyncService
+import com.rsvpnano.app.createAndroidNanoClient
+import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.PendingUpload
+import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.launch
 
 private data class CompanionUiState(
     val drafts: List<PendingUpload> = emptyList(),
     val rssFeeds: List<String> = emptyList(),
+    val books: List<NanoBook> = emptyList(),
+    val address: String = "http://192.168.4.1",
+    val draftTitle: String = "",
+    val draftSourceUrl: String = "",
+    val draftBody: String = "",
+    val rssFeedDraft: String = "",
+    val isConnected: Boolean = false,
     val status: String = "Ready",
 )
 
 @Composable
 fun CompanionApp(sharedApp: RsvpSharedApp) {
     val scope = rememberCoroutineScope()
+    val deviceSyncService: NanoDeviceSyncService = remember { createAndroidDeviceSyncService() }
+    val articleFetchClient = remember { createAndroidArticleFetchClient() }
+    val nanoClient = remember { createAndroidNanoClient() }
     var uiState by remember { mutableStateOf(CompanionUiState(status = "Loading shared data...")) }
 
     fun refresh() {
@@ -42,6 +61,183 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
             val drafts = sharedApp.facade.loadDrafts()
             val feeds = sharedApp.facade.loadRssFeeds()
             uiState = uiState.copy(drafts = drafts, rssFeeds = feeds, status = "Loaded ${drafts.size} drafts.")
+        }
+    }
+
+    fun connect() {
+        scope.launch {
+            uiState = uiState.copy(status = "Connecting...")
+            runCatching { deviceSyncService.connect(uiState.address) }
+                .onSuccess { snapshot ->
+                    val deviceName = snapshot.info?.name ?: "RSVP Nano"
+                    val mergedFeeds = sharedApp.facade.saveRssFeeds(
+                        sharedApp.facade.mergeRssFeeds(
+                            localFeeds = uiState.rssFeeds,
+                            deviceFeeds = snapshot.rssFeeds?.feeds.orEmpty(),
+                        )
+                    )
+                    uiState = uiState.copy(
+                        books = snapshot.books,
+                        rssFeeds = mergedFeeds,
+                        isConnected = snapshot.info != null,
+                        status = "Connected to $deviceName. Loaded ${snapshot.books.size} books.",
+                    )
+                }
+                .onFailure { error ->
+                    uiState = uiState.copy(isConnected = false, status = error.message ?: "Connection failed.")
+                }
+        }
+    }
+
+    fun addRssFeed() {
+        scope.launch {
+            val feed = uiState.rssFeedDraft.trim()
+            if (!feed.startsWith("http://") && !feed.startsWith("https://")) {
+                uiState = uiState.copy(status = "RSS feed URLs must start with http:// or https://.")
+                return@launch
+            }
+            val feeds = sharedApp.facade.saveRssFeeds(uiState.rssFeeds + feed)
+            uiState = uiState.copy(
+                rssFeeds = feeds,
+                rssFeedDraft = "",
+                status = if (uiState.isConnected) "RSS feed saved locally. Sync to write it to the reader." else "RSS feed saved locally.",
+            )
+        }
+    }
+
+    fun saveTextDraft() {
+        scope.launch {
+            val title = uiState.draftTitle.trim()
+            val body = uiState.draftBody.trim()
+            if (title.isEmpty() || body.isEmpty()) {
+                uiState = uiState.copy(status = "Text drafts need a title and body.")
+                return@launch
+            }
+            sharedApp.facade.saveDraft(
+                PendingUpload(
+                    id = UUID.randomUUID().toString(),
+                    title = title,
+                    sourceUrl = uiState.draftSourceUrl.trim().ifEmpty { null },
+                    body = body,
+                    createdAt = Instant.now().toString(),
+                )
+            )
+            uiState = uiState.copy(
+                drafts = sharedApp.facade.loadDrafts(),
+                draftTitle = "",
+                draftSourceUrl = "",
+                draftBody = "",
+                status = "Text draft saved locally.",
+            )
+        }
+    }
+
+    fun saveLinkDraft() {
+        scope.launch {
+            val title = uiState.draftTitle.trim()
+            val sourceUrl = uiState.draftSourceUrl.trim()
+            if (title.isEmpty() || !sourceUrl.startsWith("http://") && !sourceUrl.startsWith("https://")) {
+                uiState = uiState.copy(status = "Saved links need a title and http:// or https:// URL.")
+                return@launch
+            }
+            sharedApp.facade.saveDraft(
+                PendingUpload(
+                    id = UUID.randomUUID().toString(),
+                    title = title,
+                    sourceUrl = sourceUrl,
+                    body = "",
+                    createdAt = Instant.now().toString(),
+                )
+            )
+            uiState = uiState.copy(
+                drafts = sharedApp.facade.loadDrafts(),
+                draftTitle = "",
+                draftSourceUrl = "",
+                draftBody = "",
+                status = "Link draft saved locally. Fetch it before syncing.",
+            )
+        }
+    }
+
+    fun deleteDraft(draft: PendingUpload) {
+        scope.launch {
+            sharedApp.facade.deleteDraft(draft)
+            uiState = uiState.copy(drafts = sharedApp.facade.loadDrafts(), status = "Draft deleted.")
+        }
+    }
+
+    fun syncRssFeeds() {
+        scope.launch {
+            if (!uiState.isConnected) {
+                uiState = uiState.copy(status = "Connect to the reader before syncing RSS feeds.")
+                return@launch
+            }
+            uiState = uiState.copy(status = "Syncing RSS feeds...")
+            runCatching {
+                val normalized = sharedApp.facade.saveRssFeeds(uiState.rssFeeds)
+                deviceSyncService.saveRssFeeds(uiState.address, normalized).feeds
+            }.onSuccess { deviceFeeds ->
+                val merged = sharedApp.facade.saveRssFeeds(
+                    sharedApp.facade.mergeRssFeeds(uiState.rssFeeds, deviceFeeds)
+                )
+                uiState = uiState.copy(rssFeeds = merged, status = "RSS feeds synced to the reader.")
+            }.onFailure { error ->
+                uiState = uiState.copy(status = error.message ?: "RSS sync failed.")
+            }
+        }
+    }
+
+    fun syncSavedArticles() {
+        scope.launch {
+            if (!uiState.isConnected) {
+                uiState = uiState.copy(status = "Connect to the reader before syncing saved articles.")
+                return@launch
+            }
+            val readyDrafts = uiState.drafts.filterNot(sharedApp.facade::needsArticleFetch)
+            if (readyDrafts.isEmpty()) {
+                uiState = uiState.copy(status = "No text drafts are ready to sync.")
+                return@launch
+            }
+            uiState = uiState.copy(status = "Syncing saved articles...")
+            runCatching {
+                val remaining = sharedApp.facade.syncPendingUploads(
+                    client = nanoClient,
+                    baseUrl = uiState.address,
+                    items = readyDrafts,
+                )
+                val books = deviceSyncService.refreshBooks(uiState.address)
+                remaining to books
+            }.onSuccess { (remaining, books) ->
+                uiState = uiState.copy(
+                    drafts = remaining,
+                    books = books,
+                    status = "Synced ${readyDrafts.size} saved articles.",
+                )
+            }.onFailure { error ->
+                uiState = uiState.copy(status = error.message ?: "Saved article sync failed.")
+            }
+        }
+    }
+
+    fun fetchMissingArticles() {
+        scope.launch {
+            val missing = uiState.drafts.filter(sharedApp.facade::needsArticleFetch)
+            if (missing.isEmpty()) {
+                uiState = uiState.copy(status = "No saved links need fetching.")
+                return@launch
+            }
+            uiState = uiState.copy(status = "Fetching ${missing.size} saved links...")
+            runCatching {
+                missing.forEach { draft ->
+                    val article = articleFetchClient.fetch(title = draft.title, source = draft.sourceUrl.orEmpty())
+                    sharedApp.facade.updateDraft(draft, article.title, article.text)
+                }
+                sharedApp.facade.loadDrafts()
+            }.onSuccess { drafts ->
+                uiState = uiState.copy(drafts = drafts, status = "Fetched ${missing.size} saved links.")
+            }.onFailure { error ->
+                uiState = uiState.copy(status = error.message ?: "Article fetch failed.")
+            }
         }
     }
 
@@ -59,21 +255,94 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
             ) {
                 Text(text = "RSVP Nano Companion", style = MaterialTheme.typography.headlineSmall)
                 Text(text = uiState.status, style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(
+                    value = uiState.address,
+                    onValueChange = { uiState = uiState.copy(address = it) },
+                    label = { Text("Device address") },
+                    singleLine = true,
+                )
+                Button(onClick = { connect() }) {
+                    Text(text = if (uiState.isConnected) "Reconnect" else "Connect")
+                }
                 Button(onClick = { refresh() }) {
-                    Text(text = "Refresh")
+                    Text(text = "Refresh local")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Text(text = "Saved Articles", style = MaterialTheme.typography.titleMedium)
+                Text(text = "Device Library", style = MaterialTheme.typography.titleMedium)
                 LazyColumn(modifier = Modifier.weight(1f, fill = true)) {
+                    if (uiState.books.isEmpty()) {
+                        item { Text(text = if (uiState.isConnected) "No books on device." else "Connect to load books.") }
+                    } else {
+                        items(uiState.books) { book ->
+                            Text(text = book.title)
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(text = "Saved Articles", style = MaterialTheme.typography.titleMedium)
+                    }
+
+                    item {
+                        OutlinedTextField(
+                            value = uiState.draftTitle,
+                            onValueChange = { uiState = uiState.copy(draftTitle = it) },
+                            label = { Text("Article title") },
+                            singleLine = true,
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = uiState.draftSourceUrl,
+                            onValueChange = { uiState = uiState.copy(draftSourceUrl = it) },
+                            label = { Text("Source URL") },
+                            singleLine = true,
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = uiState.draftBody,
+                            onValueChange = { uiState = uiState.copy(draftBody = it) },
+                            label = { Text("Article text") },
+                            minLines = 3,
+                        )
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { saveTextDraft() }) {
+                                Text(text = "Save text")
+                            }
+                            Button(onClick = { saveLinkDraft() }) {
+                                Text(text = "Save link")
+                            }
+                        }
+                    }
+
                     if (uiState.drafts.isEmpty()) {
                         item {
                             Text(text = "No drafts yet.")
                         }
                     } else {
                         items(uiState.drafts) { draft ->
-                            Text(text = draft.title)
+                            val suffix = if (sharedApp.facade.needsArticleFetch(draft)) " (needs fetch)" else ""
+                            Column {
+                                Text(text = draft.title + suffix)
+                                Button(onClick = { deleteDraft(draft) }) {
+                                    Text(text = "Delete")
+                                }
+                            }
+                        }
+                        item {
+                            Button(onClick = { syncSavedArticles() }) {
+                                Text(text = "Sync saved articles")
+                            }
+                        }
+                        item {
+                            Button(onClick = { fetchMissingArticles() }) {
+                                Text(text = "Fetch saved links")
+                            }
                         }
                     }
 
@@ -87,6 +356,27 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                     } else {
                         items(uiState.rssFeeds) { feed ->
                             Text(text = feed)
+                        }
+                    }
+
+                    item {
+                        OutlinedTextField(
+                            value = uiState.rssFeedDraft,
+                            onValueChange = { uiState = uiState.copy(rssFeedDraft = it) },
+                            label = { Text("RSS feed URL") },
+                            singleLine = true,
+                        )
+                    }
+
+                    item {
+                        Button(onClick = { addRssFeed() }) {
+                            Text(text = "Add RSS feed")
+                        }
+                    }
+
+                    item {
+                        Button(onClick = { syncRssFeeds() }) {
+                            Text(text = "Sync RSS feeds")
                         }
                     }
                 }
