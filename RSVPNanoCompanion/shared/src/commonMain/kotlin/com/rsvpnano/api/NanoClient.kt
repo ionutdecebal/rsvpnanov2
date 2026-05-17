@@ -21,6 +21,6 @@ interface NanoClient {
     suspend fun forgetWifi(baseUrl: String): NanoWifiSettings
     suspend fun fetchRssFeeds(baseUrl: String): NanoRssFeeds
     suspend fun updateRssFeeds(baseUrl: String, feeds: List<String>): NanoRssFeeds
-    suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String? = null): NanoBook
+    suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String? = null): NanoUploadResponse
     suspend fun deleteBook(baseUrl: String, name: String): NanoUploadResponse
 }

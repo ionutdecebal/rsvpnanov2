@@ -1,7 +1,10 @@
 package com.rsvpnano.app
 
 import com.rsvpnano.api.NanoClient
+import com.rsvpnano.models.NanoBook
+import com.rsvpnano.models.NanoRssFeeds
 import com.rsvpnano.models.NanoSettings
+import com.rsvpnano.models.NanoUploadResponse
 import com.rsvpnano.models.NanoWifiSettings
 
 /**
@@ -25,7 +28,7 @@ class NanoDeviceSyncService(
         )
     }
 
-    suspend fun refreshBooks(baseUrl: String): List<com.rsvpnano.models.NanoBook> = client.listBooks(baseUrl)
+    suspend fun refreshBooks(baseUrl: String): List<NanoBook> = client.listBooks(baseUrl)
 
     suspend fun refreshSettings(baseUrl: String): NanoSettings = client.fetchSettings(baseUrl)
 
@@ -33,10 +36,17 @@ class NanoDeviceSyncService(
 
     suspend fun refreshRssFeeds(baseUrl: String) = client.fetchRssFeeds(baseUrl)
 
+    suspend fun saveRssFeeds(baseUrl: String, feeds: List<String>): NanoRssFeeds = client.updateRssFeeds(baseUrl, feeds)
+
     suspend fun saveSettings(baseUrl: String, settings: NanoSettings): NanoSettings = client.updateSettings(baseUrl, settings)
 
     suspend fun saveWifiSettings(baseUrl: String, ssid: String, password: String): NanoWifiSettings =
         client.updateWifi(baseUrl, ssid, password)
 
     suspend fun clearWifiSettings(baseUrl: String): NanoWifiSettings = client.forgetWifi(baseUrl)
+
+    suspend fun uploadBook(baseUrl: String, filename: String, data: ByteArray, category: String? = null): NanoUploadResponse =
+        client.uploadBook(baseUrl = baseUrl, name = filename, data = data, category = category)
+
+    suspend fun deleteBook(baseUrl: String, filename: String): NanoUploadResponse = client.deleteBook(baseUrl, filename)
 }

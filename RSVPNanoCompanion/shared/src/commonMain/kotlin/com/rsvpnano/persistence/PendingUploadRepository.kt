@@ -43,7 +43,8 @@ class PendingUploadRepository(
     }
 
     suspend fun delete(ids: List<String>) {
-        loadAll().filterNot { ids.contains(it.id) }.let(store::saveAll)
+        val next = loadAll().filterNot { ids.contains(it.id) }
+        store.saveAll(next)
     }
 
     fun needsArticleFetch(item: PendingUpload): Boolean = item.needsArticleFetch()

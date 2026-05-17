@@ -19,13 +19,13 @@ import io.ktor.client.request.put
 import io.ktor.client.request.patch
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLBuilder
 import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.Serializable
 
 class NanoKtorClient(
     private val httpClient: HttpClient,
@@ -86,31 +86,32 @@ class NanoKtorClient(
         return decodeDeviceResponse(response.status, body, NanoRssFeeds.serializer())
     }
 
-    override suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String?): NanoBook {
-        val response = httpClient.post(buildUrl(baseUrl, "api/books")) {
+    override suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String?): NanoUploadResponse {
+        val response = httpClient.post(
+            buildUrl(
+                baseUrl = baseUrl,
+                path = "api/books",
+                query = listOfNotNull("name" to name, category?.let { "category" to it }),
+            )
+        ) {
             setBody(
                 MultiPartFormDataContent(
                     formData {
                         append("file", data, headers = io.ktor.http.Headers.build {
-                            append("Content-Disposition", "filename=\"$name\"")
-                            append("Content-Type", ContentType.Application.OctetStream.toString())
+                            append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"$name\"")
+                            append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
                         })
-                        if (!category.isNullOrBlank()) {
-                            append("category", category)
-                        }
-                        append("name", name)
                     }
                 )
             )
         }
 
-        ensureSuccess(response.status)
         val body = response.body<String>()
-        return json.decodeFromString(NanoBook.serializer(), body)
+        return decodeDeviceResponse(response.status, body, NanoUploadResponse.serializer())
     }
 
     override suspend fun deleteBook(baseUrl: String, name: String): NanoUploadResponse {
-        val response = httpClient.delete(buildUrl(baseUrl, "api/books?name=$name"))
+        val response = httpClient.delete(buildUrl(baseUrl, "api/books", query = listOf("name" to name)))
         val body = response.body<String>()
         return decodeDeviceResponse(response.status, body, NanoUploadResponse.serializer())
     }
@@ -121,8 +122,9 @@ class NanoKtorClient(
         return response.body<String>()
     }
 
-    private fun buildUrl(baseUrl: String, path: String) = URLBuilder(baseUrl).apply {
+    private fun buildUrl(baseUrl: String, path: String, query: List<Pair<String, String>> = emptyList()) = URLBuilder(baseUrl).apply {
         appendPathSegments(path.split('/').filter { it.isNotBlank() })
+        query.forEach { (name, value) -> parameters.append(name, value) }
     }.build()
 
     private fun ensureSuccess(status: HttpStatusCode) {
@@ -142,9 +144,4 @@ class NanoKtorClient(
         }
         return json.decodeFromString(serializer, body)
     }
-
-    @Serializable
-    private data class BookListResponse(
-        val books: List<NanoBook>,
-    )
 }

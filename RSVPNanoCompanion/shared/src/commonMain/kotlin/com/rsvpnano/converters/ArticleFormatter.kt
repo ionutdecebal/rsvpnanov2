@@ -28,14 +28,14 @@ object ArticleFormatter {
         }
     }
 
-    private fun focusedHTML(from html: String): String {
+    private fun focusedHTML(from: String): String {
         val cleaned = removingBlocks(
-            from = html,
+            from = from,
             tags = listOf("script", "style", "svg", "nav", "header", "footer", "aside", "form", "noscript"),
         )
 
         for (tag in listOf("article", "main", "body")) {
-            firstElementContent(inValue = cleaned, tag = tag)?.let { return it }
+            firstElementContent(value = cleaned, tag = tag)?.let { return it }
         }
         return cleaned
     }
@@ -46,8 +46,8 @@ object ArticleFormatter {
             lowered.contains("<main") || lowered.contains("<p")
     }
 
-    private fun fallbackTitle(from source: String): String {
-        val host = source.substringAfter("//", missingDelimiterValue = "")
+    private fun fallbackTitle(from: String): String {
+        val host = from.substringAfter("//", missingDelimiterValue = "")
             .substringBefore("/")
             .substringBefore(":")
         return if (host.isBlank()) "Shared Article" else host
@@ -74,26 +74,26 @@ object ArticleFormatter {
         return title == source || title == host || title == wwwHost
     }
 
-    private fun htmlTitle(from html: String): String? {
-        val title = firstElementContent(inValue = html, tag = "title") ?: return null
+    private fun htmlTitle(from: String): String? {
+        val title = firstElementContent(value = from, tag = "title") ?: return null
         val cleaned = RsvpTextUtils.cleanedLine(RsvpTextUtils.readableText(title))
         return cleaned.takeIf { it.isNotEmpty() }?.take(120)
     }
 
-    private fun firstElementContent(inValue: String, tag: String): String? {
-        val openStart = inValue.indexOf("<$tag", ignoreCase = true)
+    private fun firstElementContent(value: String, tag: String): String? {
+        val openStart = value.indexOf("<$tag", ignoreCase = true)
         if (openStart < 0) {
             return null
         }
-        val openEnd = inValue.indexOf('>', startIndex = openStart)
+        val openEnd = value.indexOf('>', startIndex = openStart)
         if (openEnd < 0) {
             return null
         }
-        val close = inValue.indexOf("</$tag>", startIndex = openEnd + 1, ignoreCase = true)
+        val close = value.indexOf("</$tag>", startIndex = openEnd + 1, ignoreCase = true)
         if (close < 0) {
             return null
         }
-        return inValue.substring(openEnd + 1, close)
+        return value.substring(openEnd + 1, close)
     }
 
     private fun removingBlocks(from: String, tags: List<String>): String {

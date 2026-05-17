@@ -1,7 +1,7 @@
 package com.rsvpnano.converters
 
 internal actual object PlatformTextDecoder {
-    override fun decode(data: ByteArray, charsetName: String): String? {
+    actual fun decode(data: ByteArray, charsetName: String): String? {
         return when (charsetName.lowercase()) {
             "utf-8", "utf8" -> String(data, Charsets.UTF_8)
             "utf-16", "utf16" -> String(data, Charsets.UTF_16)

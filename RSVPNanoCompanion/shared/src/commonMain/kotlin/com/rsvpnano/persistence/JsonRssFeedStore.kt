@@ -1,5 +1,6 @@
 package com.rsvpnano.persistence
 
+import com.rsvpnano.sync.RssFeedNormalizer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -19,12 +20,12 @@ class JsonRssFeedStore(
 ) : RssFeedStore {
     override suspend fun loadAll(): List<String> {
         val text = storage.readText() ?: return emptyList()
-        return runCatching { json.decodeFromString(RssFeedList.serializer(), text).items }
+        return runCatching { RssFeedNormalizer.normalize(json.decodeFromString(RssFeedList.serializer(), text).items) }
             .getOrDefault(emptyList())
     }
 
     override suspend fun saveAll(items: List<String>) {
-        storage.writeText(json.encodeToString(RssFeedList.serializer(), RssFeedList(items)))
+        storage.writeText(json.encodeToString(RssFeedList.serializer(), RssFeedList(RssFeedNormalizer.normalize(items))))
     }
 
     @Serializable

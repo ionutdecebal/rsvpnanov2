@@ -29,16 +29,16 @@ internal object RsvpTextUtils {
 
     fun decodeText(data: ByteArray): String? {
         if (data.size >= 3 && data[0] == 0xEF.toByte() && data[1] == 0xBB.toByte() && data[2] == 0xBF.toByte()) {
-            return data.copyOfRange(3, data.size).toString(Charsets.UTF_8)
+            return data.copyOfRange(3, data.size).decodeUtf8()
         }
         if (data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0xFE.toByte()) {
-            return data.copyOfRange(2, data.size).toString(Charsets.UTF_16LE)
+            return PlatformTextDecoder.decode(data.copyOfRange(2, data.size), "utf-16le")
         }
         if (data.size >= 2 && data[0] == 0xFE.toByte() && data[1] == 0xFF.toByte()) {
-            return data.copyOfRange(2, data.size).toString(Charsets.UTF_16BE)
+            return PlatformTextDecoder.decode(data.copyOfRange(2, data.size), "utf-16be")
         }
 
-        val initialEncoding = detectUtf16WithoutBom(data) ?: Charsets.UTF_8
+        val initialEncoding = detectUtf16WithoutBom(data) ?: "utf-8"
         val decoded = data.decodeOrNull(initialEncoding)
             ?: PlatformTextDecoder.decode(data, "windows-1252")
             ?: PlatformTextDecoder.decode(data, "ISO-8859-1")
@@ -64,7 +64,7 @@ internal object RsvpTextUtils {
 
     fun titleFromText(text: String, fallback: String): String {
         if (looksLikeHTML(text)) {
-            firstMatch(text, Regex("<title[^>]*>(.*?)</title>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL))
+            firstMatch(text, Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)))
                 ?.let { cleanedLine(stripHTML(it)) }
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { return it }
@@ -191,18 +191,18 @@ internal object RsvpTextUtils {
         }
     }
 
-    private fun detectUtf16WithoutBom(data: ByteArray): kotlin.text.Charset? {
+    private fun detectUtf16WithoutBom(data: ByteArray): String? {
         if (data.size < 4) {
             return null
         }
         return when {
-            data[0] == 0x3c.toByte() && data[1] == 0x00.toByte() && data[2] == 0x3f.toByte() && data[3] == 0x00.toByte() -> Charsets.UTF_16LE
-            data[0] == 0x00.toByte() && data[1] == 0x3c.toByte() && data[2] == 0x00.toByte() && data[3] == 0x3f.toByte() -> Charsets.UTF_16BE
+            data[0] == 0x3c.toByte() && data[1] == 0x00.toByte() && data[2] == 0x3f.toByte() && data[3] == 0x00.toByte() -> "utf-16le"
+            data[0] == 0x00.toByte() && data[1] == 0x3c.toByte() && data[2] == 0x00.toByte() && data[3] == 0x3f.toByte() -> "utf-16be"
             else -> null
         }
     }
 
-    private fun sniffDeclaredEncoding(text: String): kotlin.text.Charset? {
+    private fun sniffDeclaredEncoding(text: String): String? {
         val head = text.take(512)
         val value = firstMatch(
             head,
@@ -210,10 +210,10 @@ internal object RsvpTextUtils {
         ) ?: return null
 
         return when (value.lowercase()) {
-            "utf-8", "utf8" -> Charsets.UTF_8
-            "utf-16", "utf16" -> Charsets.UTF_16
-            "utf-16le" -> Charsets.UTF_16LE
-            "utf-16be" -> Charsets.UTF_16BE
+            "utf-8", "utf8" -> "utf-8"
+            "utf-16", "utf16" -> "utf-16"
+            "utf-16le" -> "utf-16le"
+            "utf-16be" -> "utf-16be"
             "windows-1252", "cp1252" -> null
             "iso-8859-1", "latin1" -> null
             else -> null
@@ -252,11 +252,13 @@ internal object RsvpTextUtils {
 
     private fun firstMatch(value: String, regex: Regex): String? = regex.find(value)?.groupValues?.getOrNull(1)
 
-    private fun ByteArray.decodeOrNull(charset: kotlin.text.Charset): String? {
+    private fun ByteArray.decodeOrNull(charsetName: String): String? {
         return try {
-            String(this, charset)
+            if (charsetName == "utf-8") decodeUtf8() else PlatformTextDecoder.decode(this, charsetName)
         } catch (_: Exception) {
             null
         }
     }
+
+    private fun ByteArray.decodeUtf8(): String = decodeToString()
 }

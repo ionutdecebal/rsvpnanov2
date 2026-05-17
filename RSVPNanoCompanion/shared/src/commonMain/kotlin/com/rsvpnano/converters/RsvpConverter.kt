@@ -9,7 +9,7 @@ object RsvpConverter {
         }
 
         if (filename.lowercase().endsWith(".epub")) {
-            throw RsvpConversionError.unsupportedEpub
+            return EpubConverter.convert(data, filename)
         }
 
         val rawText = RsvpTextUtils.decodeText(data) ?: throw RsvpConversionError.unreadableText
@@ -39,7 +39,7 @@ object RsvpConverter {
         return writer.finalize(fallbackChapterTitle = title)
     }
 
-    fun readableText(from value: String): String = RsvpTextUtils.readableText(value)
+    fun readableText(value: String): String = RsvpTextUtils.readableText(value)
 
     fun titleFromText(text: String, fallback: String): String = RsvpTextUtils.titleFromText(text, fallback)
 

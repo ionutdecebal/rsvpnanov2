@@ -18,7 +18,11 @@ internal object EpubUtils {
     fun fallbackChapterTitle(path: String, index: Int): String {
         val name = path.substringAfterLast('/').substringBeforeLast('.').replace(Regex("[_-]+"), " ")
         val cleaned = RsvpTextUtils.cleanedLine(name)
-        return if (cleaned.isEmpty()) "Chapter $index" else cleaned
+        return if (cleaned.isEmpty()) {
+            "Chapter $index"
+        } else {
+            cleaned.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        }
     }
 
     private fun zipDirname(path: String): String {

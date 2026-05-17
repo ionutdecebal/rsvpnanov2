@@ -6,12 +6,14 @@ import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 internal actual object PlatformEpubConverter {
-    override fun convert(data: ByteArray, filename: String): RsvpBookFile {
+    actual fun convert(data: ByteArray, filename: String): RsvpBookFile {
         val entries = readEntries(data)
         val containerXml = entries[EpubUtils.normalizeZipPath("META-INF/container.xml").lowercase()]
+            ?.let(RsvpTextUtils::decodeText)
             ?: throw RsvpConversionError.unsupportedEpub
         val opfPath = containerRootfile(containerXml) ?: throw RsvpConversionError.unsupportedEpub
         val packageXml = entries[EpubUtils.normalizeZipPath(opfPath).lowercase()]
+            ?.let(RsvpTextUtils::decodeText)
             ?: throw RsvpConversionError.unsupportedEpub
 
         val packageInfo = parsePackage(packageXml, opfPath)
