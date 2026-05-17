@@ -9,20 +9,10 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
-        ivy {
-            name = "GoogleAapt2"
-            url = uri("https://dl.google.com/dl/android/maven2/")
-            patternLayout {
-                artifact("/com/android/tools/build/aapt2/[revision]/[artifact]-[revision](-[classifier]).[ext]")
-            }
-            content {
-                includeModule("com.android.tools.build", "aapt2")
-            }
-        }
     }
 }
 
