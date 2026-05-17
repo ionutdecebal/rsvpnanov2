@@ -1,9 +1,12 @@
 import SwiftUI
 import UIKit
+import shared
 
 @MainActor
 final class NanoViewModel: ObservableObject {
-    private let rssFeedStore = LocalRssFeedStore()
+    private let sharedFacade = IosSharedWiringKt.createIosSharedFacade(appGroupIdentifier: SharedInbox.appGroupIdentifier)
+    private let sharedDateFormatter = ISO8601DateFormatter()
+    private let sharedFallbackDateFormatter = ISO8601DateFormatter()
 
     @Published var address = "http://192.168.4.1"
     @Published var info: NanoInfo?
@@ -49,9 +52,14 @@ final class NanoViewModel: ObservableObject {
         return base
     }
 
-    func startAutoConnect() {
-        refreshPendingUploads()
-        rssFeeds = rssFeedStore.load()
+    func startAutoConnect() async {
+        await refreshPendingUploads()
+        do {
+            rssFeeds = try await sharedFacade.loadRssFeeds()
+        } catch {
+            lastConnectionError = error.localizedDescription
+            rssFeeds = []
+        }
     }
 
     func stopAutoConnect() {
@@ -81,7 +89,7 @@ final class NanoViewModel: ObservableObject {
                 if let deviceFeeds = try? await client.fetchRssFeeds().feeds {
                     self.mergeRssFeedsFromDevice(deviceFeeds)
                 }
-                self.refreshPendingUploads()
+                await self.refreshPendingUploads()
                 self.status = "Library refreshed from the SD card."
             }
         }
@@ -168,20 +176,24 @@ final class NanoViewModel: ObservableObject {
         if !next.contains(feed) {
             next.append(feed)
         }
-        saveRssFeeds(next, status: isConnected ? "RSS feed synced." : "RSS feed saved locally.")
+        Task {
+            await saveRssFeeds(next, status: isConnected ? "RSS feed synced." : "RSS feed saved locally.")
+        }
         rssFeedDraft = ""
     }
 
     func deleteRssFeeds(at offsets: IndexSet) {
         var next = rssFeeds
         next.remove(atOffsets: offsets)
-        saveRssFeeds(next, status: "RSS feed removed.")
+        Task {
+            await saveRssFeeds(next, status: "RSS feed removed.")
+        }
     }
 
-    private func saveRssFeeds(_ feeds: [String], status successStatus: String) {
-        let cleanedFeeds = normalizedRssFeeds(feeds)
+    private func saveRssFeeds(_ feeds: [String], status successStatus: String) async {
+        let cleanedFeeds = try await sharedFacade.saveRssFeeds(localFeeds: feeds)
+
         rssFeeds = cleanedFeeds
-        rssFeedStore.save(cleanedFeeds)
         if !isConnected {
             status = successStatus
             return
@@ -190,37 +202,51 @@ final class NanoViewModel: ObservableObject {
         Task {
             await run("Saving RSS feeds") { [self] in
                 let deviceFeeds = try await NanoClient(baseURLString: self.address).updateRssFeeds(cleanedFeeds).feeds
-                self.syncedRssFeeds = normalizedRssFeeds(deviceFeeds)
-                self.rssFeeds = normalizedRssFeeds(cleanedFeeds + deviceFeeds)
-                self.rssFeedStore.save(self.rssFeeds)
+                let normalizedDeviceFeeds = self.sharedFacade.mergeRssFeeds(localFeeds: [], deviceFeeds: deviceFeeds)
+                self.syncedRssFeeds = normalizedDeviceFeeds
+                let merged = self.sharedFacade.mergeRssFeeds(localFeeds: cleanedFeeds, deviceFeeds: normalizedDeviceFeeds)
+                self.rssFeeds = merged
+                self.persistRssFeeds(merged)
                 self.status = successStatus
             }
         }
     }
 
     func syncRssFeeds() {
-        saveRssFeeds(rssFeeds, status: "RSS feeds synced to the reader.")
+        Task {
+            await saveRssFeeds(rssFeeds, status: "RSS feeds synced to the reader.")
+        }
     }
 
     func upload(_ file: PickedBookFile) {
         Task {
             await run("Preparing \(file.filename)") { [self] in
                 do {
-                    let converted = try RsvpConverter.bookFile(data: file.data, filename: file.filename)
-                    try await self.uploadConverted(converted)
-                } catch RsvpConversionError.unsupportedEpub where file.filename.lowercased().hasSuffix(".epub") {
-                    let raw = RsvpBookFile(
-                        filename: file.filename,
-                        data: file.data,
-                        title: RsvpConverter.filenameWithoutExtension(file.filename)
+                    let converted = try shared.RsvpConverter.shared.bookFile(
+                        data: kotlinByteArray(from: file.data),
+                        filename: file.filename
                     )
-                    try await self.uploadConverted(raw)
+                    try await self.uploadConverted(converted)
+                } catch {
+                    if file.filename.lowercased().hasSuffix(".epub"),
+                       error.localizedDescription == "This EPUB could not be converted locally." {
+                        let raw = shared.RsvpBookFile(
+                            filename: file.filename,
+                            data: kotlinByteArray(from: file.data),
+                            title: shared.RsvpConverter.shared.filenameWithoutExtension(filename: file.filename),
+                            wordCount: 0,
+                            chapterCount: 0
+                        )
+                        try await self.uploadConverted(raw)
+                    } else {
+                        throw error
+                    }
                 }
             }
         }
     }
 
-    func upload(_ file: RsvpBookFile) {
+    func upload(_ file: shared.RsvpBookFile) {
         Task {
             await run("Uploading \(file.title)") { [self] in
                 try await self.uploadConverted(file)
@@ -247,21 +273,25 @@ final class NanoViewModel: ObservableObject {
         }
     }
 
-    func refreshPendingUploads() {
+    func refreshPendingUploads() async {
         do {
-            pendingUploads = try PendingUploadStore().all()
+            let sharedItems = try await sharedFacade.loadDrafts()
+            pendingUploads = sharedItems.map(pendingUpload(from:))
         } catch {
             lastConnectionError = error.localizedDescription
+            pendingUploads = []
         }
     }
 
     func handleSharedInboxOpen() {
-        refreshPendingUploads()
-        guard let item = pendingUploads.first(where: { $0.needsArticleFetch }) else {
-            status = "Saved article ready to edit or sync."
-            return
+        Task {
+            await refreshPendingUploads()
+            guard let item = pendingUploads.first(where: { $0.needsArticleFetch }) else {
+                status = "Saved article ready to edit or sync."
+                return
+            }
+            fetchArticleText(for: item)
         }
-        fetchArticleText(for: item)
     }
 
     func fetchArticleText(for item: PendingUpload) {
@@ -270,8 +300,8 @@ final class NanoViewModel: ObservableObject {
             status = "Fetching article text"
             do {
                 let article = try await ArticleFetchService.fetch(title: item.title, source: item.source)
-                try PendingUploadStore().update(item, title: article.title, body: article.text)
-                pendingUploads = try PendingUploadStore().all()
+                try await sharedFacade.updateDraft(item: sharedPendingUpload(from: item), title: article.title, body: article.text)
+                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
                 lastConnectionError = nil
                 status = "Fetched article text for \(article.title)."
             } catch {
@@ -283,15 +313,17 @@ final class NanoViewModel: ObservableObject {
     }
 
     func savePendingUpload(_ item: PendingUpload, title: String, body: String) {
-        do {
-            try PendingUploadStore().update(item, title: title, body: body)
-            pendingUploads = try PendingUploadStore().all()
-            editingArticle = nil
-            lastConnectionError = nil
-            status = "Saved \(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.title : title)."
-        } catch {
-            lastConnectionError = error.localizedDescription
-            status = "Could not save article."
+        Task {
+            do {
+                try await sharedFacade.updateDraft(item: sharedPendingUpload(from: item), title: title, body: body)
+                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
+                editingArticle = nil
+                lastConnectionError = nil
+                status = "Saved \(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.title : title)."
+            } catch {
+                lastConnectionError = error.localizedDescription
+                status = "Could not save article."
+            }
         }
     }
 
@@ -302,7 +334,7 @@ final class NanoViewModel: ObservableObject {
                 for item in items {
                     try await self.uploadPendingItem(item)
                 }
-                self.pendingUploads = try PendingUploadStore().all()
+                self.pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
                 self.books = try await NanoClient(baseURLString: self.address).fetchBooks()
                 self.status = items.count == 1 ? "Synced \(items[0].title)." : "Synced saved articles."
             }
@@ -313,7 +345,7 @@ final class NanoViewModel: ObservableObject {
         Task {
             await run("Syncing \(item.title)") { [self] in
                 try await self.uploadPendingItem(item)
-                self.pendingUploads = try PendingUploadStore().all()
+                self.pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
                 self.books = try await NanoClient(baseURLString: self.address).fetchBooks()
                 self.status = "Synced \(item.title)."
             }
@@ -321,11 +353,16 @@ final class NanoViewModel: ObservableObject {
     }
 
     func deletePendingUploads(at offsets: IndexSet) {
-        do {
-            try PendingUploadStore().delete(at: offsets)
-            refreshPendingUploads()
-        } catch {
-            lastConnectionError = error.localizedDescription
+        Task {
+            do {
+                let ids = offsets.compactMap { index in
+                    index < pendingUploads.count ? pendingUploads[index].id.uuidString : nil
+                }
+                try await sharedFacade.deleteDrafts(ids: ids)
+                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
+            } catch {
+                lastConnectionError = error.localizedDescription
+            }
         }
     }
 
@@ -345,7 +382,7 @@ final class NanoViewModel: ObservableObject {
                     self.applyWifiSettings(wifi)
                 }
                 self.mergeRssFeedsFromDevice((try? await client.fetchRssFeeds().feeds) ?? [])
-                self.refreshPendingUploads()
+                await self.refreshPendingUploads()
                 self.status = "Connected to \(self.info?.name ?? "RSVP Nano"), but the library could not be read."
                 return
             }
@@ -354,25 +391,26 @@ final class NanoViewModel: ObservableObject {
                 self.applyWifiSettings(wifi)
             }
             self.mergeRssFeedsFromDevice((try? await client.fetchRssFeeds().feeds) ?? [])
-            self.refreshPendingUploads()
+            await self.refreshPendingUploads()
             self.lastConnectionError = nil
             self.status = "Connected to \(self.info?.name ?? "RSVP Nano"). Reading /books."
         }
         return isConnected
     }
 
-    private func uploadConverted(_ file: RsvpBookFile) async throws {
+    private func uploadConverted(_ file: shared.RsvpBookFile) async throws {
         let client = NanoClient(baseURLString: self.address)
-        _ = try await client.uploadBook(data: file.data, filename: file.filename, category: "book")
+        let nativeFile = nativeBookFile(from: file)
+        _ = try await client.uploadBook(data: nativeFile.data, filename: nativeFile.filename, category: "book")
         self.books = try await client.fetchBooks()
         self.status = uploadStatus(for: file)
     }
 
     private func uploadPendingItem(_ item: PendingUpload) async throws {
-        let store = PendingUploadStore()
-        let file = try store.bookFile(for: item)
+        let sharedFile = sharedFacade.bookFileFor(item: sharedPendingUpload(from: item))
+        let file = nativeBookFile(from: sharedFile)
         _ = try await NanoClient(baseURLString: self.address).uploadBook(data: file.data, filename: file.filename, category: "article")
-        try store.delete(item)
+        try await sharedFacade.deleteDraft(item: sharedPendingUpload(from: item))
     }
 
     private func run(_ busyStatus: String, showBusy: Bool = true, operation: @escaping () async throws -> Void) async {
@@ -391,7 +429,7 @@ final class NanoViewModel: ObservableObject {
         }
     }
 
-    private func uploadStatus(for file: RsvpBookFile) -> String {
+    private func uploadStatus(for file: shared.RsvpBookFile) -> String {
         guard file.wordCount > 0 else {
             return "Uploaded \(file.title) into /books/books."
         }
@@ -401,9 +439,16 @@ final class NanoViewModel: ObservableObject {
     }
 
     private func mergeRssFeedsFromDevice(_ deviceFeeds: [String]) {
-        syncedRssFeeds = normalizedRssFeeds(deviceFeeds)
-        rssFeeds = normalizedRssFeeds(rssFeedStore.load() + syncedRssFeeds)
-        rssFeedStore.save(rssFeeds)
+        syncedRssFeeds = sharedFacade.mergeRssFeeds(localFeeds: [], deviceFeeds: deviceFeeds)
+        let merged = sharedFacade.mergeRssFeeds(localFeeds: rssFeeds, deviceFeeds: syncedRssFeeds)
+        rssFeeds = merged
+        persistRssFeeds(merged)
+    }
+
+    private func persistRssFeeds(_ feeds: [String]) {
+        Task {
+            _ = try? await sharedFacade.saveRssFeeds(localFeeds: feeds)
+        }
     }
 
     private func applyWifiSettings(_ wifi: NanoWifiSettings) {
@@ -412,28 +457,68 @@ final class NanoViewModel: ObservableObject {
         wifiPasswordDraft = ""
     }
 
-    private func normalizedRssFeeds(_ feeds: [String]) -> [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for feed in feeds {
-            let cleaned = feed.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !cleaned.isEmpty, !seen.contains(cleaned) else { continue }
-            seen.insert(cleaned)
-            result.append(cleaned)
+    private func sharedPendingUpload(from item: PendingUpload) -> shared.PendingUpload {
+        let source = item.source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceUrl = source.isEmpty ? nil : source
+        sharedDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let createdAt = sharedDateFormatter.string(from: item.createdAt)
+        return shared.PendingUpload(
+            id: item.id.uuidString,
+            title: item.title,
+            sourceUrl: sourceUrl,
+            body: item.body,
+            createdAt: createdAt
+        )
+    }
+
+    private func pendingUpload(from item: shared.PendingUpload) -> PendingUpload {
+        sharedDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        sharedFallbackDateFormatter.formatOptions = [.withInternetDateTime]
+        let createdAt = sharedDateFormatter.date(from: item.createdAt)
+            ?? sharedFallbackDateFormatter.date(from: item.createdAt)
+            ?? Date()
+        return PendingUpload(
+            id: UUID(uuidString: item.id) ?? UUID(),
+            title: item.title,
+            source: item.sourceUrl ?? "",
+            body: item.body,
+            createdAt: createdAt
+        )
+    }
+
+    private func nativeBookFile(from file: shared.RsvpBookFile) -> RsvpBookFile {
+        RsvpBookFile(
+            filename: file.filename,
+            data: data(from: file.data),
+            title: file.title,
+            wordCount: Int(file.wordCount),
+            chapterCount: Int(file.chapterCount)
+        )
+    }
+
+    private func data(from bytes: KotlinByteArray) -> Data {
+        let count = Int(bytes.size)
+        var data = Data(count: count)
+        data.withUnsafeMutableBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            for index in 0..<count {
+                let value = bytes.get(index: Int32(index))
+                baseAddress.advanced(by: index).storeBytes(of: value, as: Int8.self)
+            }
         }
-        return result
-    }
-}
-
-private struct LocalRssFeedStore {
-    private let key = "RSVPNanoLocalRssFeeds"
-
-    func load() -> [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? []
+        return data
     }
 
-    func save(_ feeds: [String]) {
-        UserDefaults.standard.set(feeds, forKey: key)
+    private func kotlinByteArray(from data: Data) -> KotlinByteArray {
+        let array = KotlinByteArray(size: Int32(data.count))
+        data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            for index in 0..<data.count {
+                let value = baseAddress.advanced(by: index).assumingMemoryBound(to: UInt8.self).pointee
+                array.set(index: Int32(index), value: Int8(bitPattern: value))
+            }
+        }
+        return array
     }
 }
 
@@ -504,13 +589,13 @@ struct ContentView: View {
             }
         }
         .task {
-            viewModel.startAutoConnect()
+            await viewModel.startAutoConnect()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            viewModel.refreshPendingUploads()
+            Task { await viewModel.refreshPendingUploads() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            viewModel.refreshPendingUploads()
+            Task { await viewModel.refreshPendingUploads() }
         }
         .onOpenURL { url in
             if url.scheme == "rsvpnano", url.host == "inbox" {

@@ -1,7 +1,8 @@
 import SwiftUI
+import shared
 
 struct TextImportView: View {
-    var onImport: (RsvpBookFile) -> Void
+    var onImport: (shared.RsvpBookFile) -> Void
     var onCancel: () -> Void
 
     @State private var title = ""
@@ -49,9 +50,9 @@ struct TextImportView: View {
     private func importText() {
         do {
             let fallbackTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? RsvpConverter.titleFromText(text, fallback: "Untitled")
+                ? shared.RsvpConverter.shared.titleFromText(text: text, fallback: "Untitled")
                 : title
-            let file = try RsvpConverter.rsvpFile(title: fallbackTitle, source: source, text: text)
+            let file = try shared.RsvpConverter.shared.rsvpFile(title: fallbackTitle, source: source, text: text)
             onImport(file)
         } catch {
             errorMessage = error.localizedDescription

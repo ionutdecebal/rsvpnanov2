@@ -18,3 +18,7 @@ dependencyResolutionManagement {
 rootProject.name = "rsvpnano"
 
 include(":shared")
+include(":androidApp")
+
+project(":shared").projectDir = file("RSVPNanoCompanion/shared")
+project(":androidApp").projectDir = file("RSVPNanoCompanion/androidApp")

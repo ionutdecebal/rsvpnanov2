@@ -3,11 +3,11 @@ name: CI - iOS
 on:
   push:
     paths:
-      - 'shared/**'
+      - 'RSVPNanoCompanion/shared/**'
       - '.github/workflows/**'
   pull_request:
     paths:
-      - 'shared/**'
+      - 'RSVPNanoCompanion/shared/**'
       - '.github/workflows/**'
 
 jobs:
@@ -27,4 +27,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shared-xcframework
-          path: shared/build
+          path: RSVPNanoCompanion/shared/build

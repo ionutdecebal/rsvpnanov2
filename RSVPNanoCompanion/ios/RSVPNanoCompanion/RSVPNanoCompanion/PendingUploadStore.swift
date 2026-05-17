@@ -109,16 +109,6 @@ struct PendingUploadStore {
         return item
     }
 
-    func bookFile(for item: PendingUpload) throws -> RsvpBookFile {
-        let article = ArticleFormatter.article(title: item.title, source: item.source, htmlOrText: item.body)
-        return try RsvpConverter.rsvpFile(
-            title: article.title,
-            author: "",
-            source: article.source,
-            events: ArticleFormatter.events(from: article)
-        )
-    }
-
     func update(_ item: PendingUpload, title: String, body: String) throws {
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedBody.isEmpty else {

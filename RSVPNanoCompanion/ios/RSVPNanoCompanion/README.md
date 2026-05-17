@@ -26,7 +26,7 @@ comfortable using Xcode.
 6. Open:
 
 ```text
-ios/RSVPNanoCompanion/RSVPNanoCompanion.xcodeproj
+RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion.xcodeproj
 ```
 
 7. Select the `RSVPNanoCompanion` scheme.
@@ -47,9 +47,9 @@ com.yourname.rsvpnano.share
     places:
 
 ```text
-ios/RSVPNanoCompanion/RSVPNanoCompanion/RSVPNanoCompanion.entitlements
-ios/RSVPNanoCompanion/RSVPNanoShareExtension/RSVPNanoShareExtension.entitlements
-ios/RSVPNanoCompanion/RSVPNanoCompanion/PendingUploadStore.swift
+RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion.entitlements
+RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoShareExtension/RSVPNanoShareExtension.entitlements
+RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion/PendingUploadStore.swift
 ```
 
 For example:
@@ -66,6 +66,22 @@ group.com.yourname.rsvpnano
 Free Apple IDs can run apps on personal devices, but they may have short-lived provisioning and may
 not support every capability needed by the share extension. A paid Apple Developer Program account
 is still required for TestFlight, App Store, and unlisted App Store distribution.
+
+## Kotlin Shared Framework
+
+The iOS app is migrating to a Kotlin Multiplatform shared module. The framework is built as an
+XCFramework from the `shared` Gradle module and then embedded in Xcode.
+
+1. Build and copy the XCFramework:
+
+```text
+RSVPNanoCompanion/tools/build_shared_xcframework.sh
+```
+
+2. In Xcode, open the project and add the framework:
+   - Drag `RSVPNanoCompanion/ios/RSVPNanoCompanion/SharedFrameworks/shared.xcframework` into the project navigator.
+   - In `Frameworks, Libraries, and Embedded Content`, set it to `Embed & Sign`.
+3. Build the app to verify the shared module is linked.
 
 ## Connect To The Reader
 

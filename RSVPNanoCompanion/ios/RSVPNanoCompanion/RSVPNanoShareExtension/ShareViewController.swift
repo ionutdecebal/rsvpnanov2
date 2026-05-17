@@ -1,8 +1,11 @@
 import UIKit
 import UniformTypeIdentifiers
+import shared
 
 final class ShareViewController: UIViewController {
     private static let maxSharedTextCharacters = 300_000
+    private let sharedFacade = IosSharedWiringKt.createIosSharedFacade(appGroupIdentifier: SharedInbox.appGroupIdentifier)
+    private let sharedDateFormatter = ISO8601DateFormatter()
 
     private let titleField = UITextField()
     private let sourceLabel = UILabel()
@@ -134,14 +137,14 @@ final class ShareViewController: UIViewController {
         }
 
         if !itemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let title = [itemTitle, RsvpConverter.titleFromText(itemText, fallback: "Shared Text")].firstNonEmpty ?? "Shared Text"
+            let title = [itemTitle, sharedTitleFromText(itemText, fallback: "Shared Text")].firstNonEmpty ?? "Shared Text"
             return SharedInput(title: title, source: "Shared text", text: Self.clipped(itemText), isURL: false, diagnostic: "Host text")
         }
 
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }),
            let text = try await loadText(from: provider),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let title = [itemTitle, RsvpConverter.titleFromText(text, fallback: "Shared Text")].firstNonEmpty ?? "Shared Text"
+            let title = [itemTitle, sharedTitleFromText(text, fallback: "Shared Text")].firstNonEmpty ?? "Shared Text"
             return SharedInput(title: title, source: "Shared text", text: text, isURL: false, diagnostic: "Plain text")
         }
 
@@ -215,6 +218,10 @@ final class ShareViewController: UIViewController {
         return source
     }
 
+    private func sharedTitleFromText(_ text: String, fallback: String) -> String {
+        shared.RsvpConverter.shared.titleFromText(text: text, fallback: fallback)
+    }
+
     private static func clipped(_ value: String) -> String {
         if value.count <= maxSharedTextCharacters {
             return value
@@ -255,10 +262,20 @@ final class ShareViewController: UIViewController {
 
         Task {
             do {
-                let store = PendingUploadStore()
-                let savedItem = try store.saveDraft(title: title, source: sharedSource, body: text)
-                let savedCount = try store.all().count
-                let inboxPath = try store.rootURL.lastPathComponent
+                sharedDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let createdAt = sharedDateFormatter.string(from: Date())
+                let source = sharedSource.trimmingCharacters(in: .whitespacesAndNewlines)
+                let sourceUrl = source.isEmpty ? nil : source
+                let pending = shared.PendingUpload(
+                    id: UUID().uuidString,
+                    title: title.isEmpty ? "Shared Article" : title,
+                    sourceUrl: sourceUrl,
+                    body: text,
+                    createdAt: createdAt
+                )
+                try await sharedFacade.saveDraft(item: pending)
+                let savedCount = try await sharedFacade.loadDrafts().count
+                let bytes = Data(text.utf8).count
                 await MainActor.run {
                     hasSaved = true
                     titleField.isEnabled = false
@@ -266,7 +283,7 @@ final class ShareViewController: UIViewController {
                     saveButton.isEnabled = true
                     saveButton.setTitle("Done", for: .normal)
                     cancelButton.isHidden = true
-                    statusLabel.text = "Saved \(savedItem.title) to \(inboxPath): \(ByteCountFormatter.string(fromByteCount: Int64(savedItem.bytes), countStyle: .file)). Inbox now has \(savedCount)."
+                    statusLabel.text = "Saved \(pending.title): \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)). Inbox now has \(savedCount)."
                     if shouldOpenAppAfterSave {
                         openContainingApp()
                     }

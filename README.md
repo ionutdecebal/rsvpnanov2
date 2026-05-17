@@ -128,7 +128,7 @@ TestFlight and App Store distribution are waiting on Apple Developer account app
 
 See:
 
-[`ios/RSVPNanoCompanion/README.md`](ios/RSVPNanoCompanion/README.md)
+[`RSVPNanoCompanion/ios/RSVPNanoCompanion/README.md`](RSVPNanoCompanion/ios/RSVPNanoCompanion/README.md)
 
 ## Home Wi-Fi, RSS, And OTA
 
