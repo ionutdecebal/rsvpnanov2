@@ -1,24 +1,23 @@
 package com.rsvpnano.persistence
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSURL
-import platform.Foundation.containerURLForSecurityApplicationGroupIdentifier
-import platform.Foundation.createDirectoryAtURL
-import platform.Foundation.defaultManager
 import platform.Foundation.dataUsingEncoding
 import platform.Foundation.stringWithContentsOfURL
 import platform.Foundation.writeToURL
 
+@OptIn(ExperimentalForeignApi::class)
 class FilePendingUploadStorage(
-    private val fileManager: NSFileManager = NSFileManager.defaultManager,
+    private val fileManager: NSFileManager = NSFileManager.defaultManager(),
     private val appGroupIdentifier: String = "group.com.rsvpnano.companion",
 ) : PendingUploadStorage {
     private fun fileURL(): NSURL? {
         val rootURL = fileManager.containerURLForSecurityApplicationGroupIdentifier(appGroupIdentifier) ?: return null
-        val inbox = rootURL.URLByAppendingPathComponent("PendingUploads", isDirectory = true)
+        val inbox = rootURL.URLByAppendingPathComponent("PendingUploads", isDirectory = true) ?: return null
         fileManager.createDirectoryAtURL(inbox, withIntermediateDirectories = true, attributes = null, error = null)
         return inbox.URLByAppendingPathComponent("drafts.json")
     }
