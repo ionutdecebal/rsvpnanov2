@@ -42,6 +42,7 @@ private data class CompanionUiState(
     val draftTitle: String = "",
     val draftSourceUrl: String = "",
     val draftBody: String = "",
+    val editingDraftId: String? = null,
     val rssFeedDraft: String = "",
     val isConnected: Boolean = false,
     val status: String = "Ready",
@@ -105,6 +106,20 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
         }
     }
 
+    fun clearDraftEditor(
+        drafts: List<PendingUpload> = uiState.drafts,
+        status: String,
+    ): CompanionUiState {
+        return uiState.copy(
+            drafts = drafts,
+            draftTitle = "",
+            draftSourceUrl = "",
+            draftBody = "",
+            editingDraftId = null,
+            status = status,
+        )
+    }
+
     fun saveTextDraft() {
         scope.launch {
             val title = uiState.draftTitle.trim()
@@ -113,21 +128,19 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                 uiState = uiState.copy(status = "Text drafts need a title and body.")
                 return@launch
             }
+            val existing = uiState.editingDraftId?.let { id -> uiState.drafts.firstOrNull { it.id == id } }
             sharedApp.facade.saveDraft(
                 PendingUpload(
-                    id = UUID.randomUUID().toString(),
+                    id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
                     sourceUrl = uiState.draftSourceUrl.trim().ifEmpty { null },
                     body = body,
-                    createdAt = Instant.now().toString(),
+                    createdAt = existing?.createdAt ?: Instant.now().toString(),
                 )
             )
-            uiState = uiState.copy(
+            uiState = clearDraftEditor(
                 drafts = sharedApp.facade.loadDrafts(),
-                draftTitle = "",
-                draftSourceUrl = "",
-                draftBody = "",
-                status = "Text draft saved locally.",
+                status = if (existing == null) "Text draft saved locally." else "Text draft updated.",
             )
         }
     }
@@ -140,29 +153,46 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                 uiState = uiState.copy(status = "Saved links need a title and http:// or https:// URL.")
                 return@launch
             }
+            val existing = uiState.editingDraftId?.let { id -> uiState.drafts.firstOrNull { it.id == id } }
             sharedApp.facade.saveDraft(
                 PendingUpload(
-                    id = UUID.randomUUID().toString(),
+                    id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
                     sourceUrl = sourceUrl,
                     body = "",
-                    createdAt = Instant.now().toString(),
+                    createdAt = existing?.createdAt ?: Instant.now().toString(),
                 )
             )
-            uiState = uiState.copy(
+            uiState = clearDraftEditor(
                 drafts = sharedApp.facade.loadDrafts(),
-                draftTitle = "",
-                draftSourceUrl = "",
-                draftBody = "",
-                status = "Link draft saved locally. Fetch it before syncing.",
+                status = if (existing == null) {
+                    "Link draft saved locally. Fetch it before syncing."
+                } else {
+                    "Link draft updated. Fetch it before syncing."
+                },
             )
         }
+    }
+
+    fun editDraft(draft: PendingUpload) {
+        uiState = uiState.copy(
+            draftTitle = draft.title,
+            draftSourceUrl = draft.sourceUrl.orEmpty(),
+            draftBody = draft.body,
+            editingDraftId = draft.id,
+            status = "Editing ${draft.title}.",
+        )
     }
 
     fun deleteDraft(draft: PendingUpload) {
         scope.launch {
             sharedApp.facade.deleteDraft(draft)
-            uiState = uiState.copy(drafts = sharedApp.facade.loadDrafts(), status = "Draft deleted.")
+            val editingDeletedDraft = uiState.editingDraftId == draft.id
+            uiState = if (editingDeletedDraft) {
+                clearDraftEditor(drafts = sharedApp.facade.loadDrafts(), status = "Draft deleted.")
+            } else {
+                uiState.copy(drafts = sharedApp.facade.loadDrafts(), status = "Draft deleted.")
+            }
         }
     }
 
@@ -284,6 +314,11 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(text = "Saved Articles", style = MaterialTheme.typography.titleMedium)
                     }
+                    if (uiState.editingDraftId != null) {
+                        item {
+                            Text(text = "Editing saved article", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
 
                     item {
                         OutlinedTextField(
@@ -312,10 +347,15 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { saveTextDraft() }) {
-                                Text(text = "Save text")
+                                Text(text = if (uiState.editingDraftId == null) "Save text" else "Update text")
                             }
                             Button(onClick = { saveLinkDraft() }) {
-                                Text(text = "Save link")
+                                Text(text = if (uiState.editingDraftId == null) "Save link" else "Update link")
+                            }
+                            if (uiState.editingDraftId != null) {
+                                Button(onClick = { uiState = clearDraftEditor(status = "Edit cancelled.") }) {
+                                    Text(text = "Cancel")
+                                }
                             }
                         }
                     }
@@ -329,8 +369,13 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                             val suffix = if (sharedApp.facade.needsArticleFetch(draft)) " (needs fetch)" else ""
                             Column {
                                 Text(text = draft.title + suffix)
-                                Button(onClick = { deleteDraft(draft) }) {
-                                    Text(text = "Delete")
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = { editDraft(draft) }) {
+                                        Text(text = "Edit")
+                                    }
+                                    Button(onClick = { deleteDraft(draft) }) {
+                                        Text(text = "Delete")
+                                    }
                                 }
                             }
                         }
