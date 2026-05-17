@@ -1,15 +1,27 @@
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+
 plugins {
-	kotlin("multiplatform") version "2.0.21"
-	kotlin("plugin.serialization") version "2.0.21"
-	id("com.android.library") version "8.5.2"
+	kotlin("multiplatform")
+	kotlin("plugin.serialization")
+	id("com.android.library")
 }
 
 kotlin {
+	val sharedXcFramework = XCFramework("shared")
+
 	androidTarget()
 
-	iosX64()
-	iosArm64()
-	iosSimulatorArm64()
+	listOf(
+		iosX64(),
+		iosArm64(),
+		iosSimulatorArm64(),
+	).forEach { iosTarget ->
+		iosTarget.binaries.framework {
+			baseName = "shared"
+			isStatic = true
+			sharedXcFramework.add(this)
+		}
+	}
 
 	jvmToolchain(17)
 
@@ -34,17 +46,15 @@ kotlin {
 			implementation("io.ktor:ktor-client-okhttp:2.3.12")
 		}
 
+		androidUnitTest.dependencies {
+			implementation("io.ktor:ktor-client-mock:2.3.12")
+		}
+
 		iosMain.dependencies {
 			implementation("io.ktor:ktor-client-darwin:2.3.12")
 		}
 	}
 
-	targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
-		binaries.framework {
-			baseName = "shared"
-			isStatic = true
-		}
-	}
 }
 
 android {

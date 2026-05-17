@@ -1,5 +1,8 @@
 .pio
 .gradle
+.kotlin/
+build/
+**/build/
 .derivedData
 *.xcuserstate
 xcuserdata/
@@ -20,4 +23,5 @@ tools/*.rsvp
 *.rsvp.converting
 web/firmware/*.bin
 .cache/
+.local/
 compile_commands.json

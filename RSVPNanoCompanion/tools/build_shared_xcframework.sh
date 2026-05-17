@@ -7,7 +7,7 @@ OUTPUT_DIR="$COMPANION_DIR/ios/RSVPNanoCompanion/SharedFrameworks"
 
 cd "$ROOT_DIR"
 
-./gradlew :shared:assemble
+./gradlew :shared:assembleXCFramework
 
 mkdir -p "$OUTPUT_DIR"
 

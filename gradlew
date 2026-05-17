@@ -9,7 +9,7 @@ if [[ ! -f "$PROPERTIES_FILE" ]]; then
   exit 1
 fi
 
-DISTRIBUTION_URL="$(grep '^distributionUrl=' "$PROPERTIES_FILE" | cut -d= -f2- | sed 's#\\:##')"
+DISTRIBUTION_URL="$(grep '^distributionUrl=' "$PROPERTIES_FILE" | cut -d= -f2- | tr -d '\r' | sed 's#\\:##')"
 DISTRIBUTION_FILE_NAME="$(basename "$DISTRIBUTION_URL")"
 GRADLE_VERSION="${DISTRIBUTION_FILE_NAME#gradle-}"
 GRADLE_VERSION="${GRADLE_VERSION%-bin.zip}"

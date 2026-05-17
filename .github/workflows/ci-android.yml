@@ -3,11 +3,21 @@ name: CI - Android
 on:
   push:
     paths:
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradle/wrapper/**'
       - 'RSVPNanoCompanion/shared/**'
+      - 'RSVPNanoCompanion/androidApp/**'
       - '.github/workflows/**'
   pull_request:
     paths:
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradle/wrapper/**'
       - 'RSVPNanoCompanion/shared/**'
+      - 'RSVPNanoCompanion/androidApp/**'
       - '.github/workflows/**'
 
 jobs:
@@ -29,8 +39,8 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Run Gradle assemble and tests (shared)
-        run: bash ./gradlew :shared:assemble :shared:check --no-daemon
+      - name: Run Gradle assemble and tests
+        run: bash ./gradlew :shared:check :androidApp:assembleDebug --no-daemon
       - name: Upload shared artifacts
         if: success()
         uses: actions/upload-artifact@v4
