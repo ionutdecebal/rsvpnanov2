@@ -83,6 +83,9 @@ RSVPNanoCompanion/tools/build_shared_xcframework.sh
    - In `Frameworks, Libraries, and Embedded Content`, set it to `Embed & Sign`.
 3. Build the app to verify the shared module is linked.
 
+Pending article and RSS persistence are owned by the Kotlin shared module. Swift keeps only thin UI
+models and calls the generated shared facade from both the app and share extension.
+
 ## Connect To The Reader
 
 1. Put the reader into `Companion sync`.

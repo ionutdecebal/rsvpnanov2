@@ -9,7 +9,7 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
 - **Reuse Tests:** Implement shared `commonTest` unit tests for converters and writers and run them on both platforms to detect regressions and ensure parity.
 - **Binary Parity Gate:** Create byte-for-byte comparison tests for RSVP output; CI must run these to prevent accidental divergence.
 - **Documentation-Driven Contract:** Document public shared APIs and data formats; use these docs to keep platform adapters minimal and avoid re-implementations.
-- **Gradual Migration:** Port library code first and keep Swift implementations as a fallback until Kotlin implementations pass parity tests; this avoids duplicating production code during transition.
+- **Gradual Migration:** Port library code first and remove Swift business-logic fallbacks once Kotlin implementations pass parity tests; this avoids duplicating production code during transition.
 
 
 
@@ -27,13 +27,17 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
 6. Implement `SyncManager` in `commonMain` replicating logic from `NanoViewModel` (RSS merge, pending uploads orchestration). Keep UI state management on platform side. Expose suspend APIs for platform callers.
 7. Integrate with iOS:
    - Build KMP iOS framework (XCFramework) and add to Xcode project.
-   - Replace calls in `ContentView.swift`/`NanoViewModel` to call shared `SyncManager`/`NanoClient` via Swift coroutines bridge (use `@objc`/Kotlin/Native generated interop). Keep `PendingUploadStore.swift` adapter thin.
+   - Replace calls in `ContentView.swift`/`NanoViewModel` to call shared `SyncManager`/`NanoClient` via Swift coroutines bridge (use `@objc`/Kotlin/Native generated interop). Keep Swift-only models thin and keep persistence in shared.
    - Keep Share extension Swift-only but call shared converters for formatting.
 8. Implement Android app shell (Compose) that mirrors SwiftUI flows and calls `shared` APIs.
+   - Current Android shell uses shared storage, shared Ktor device sync, device book listing, saved article create/delete, ready text article sync, URL-only article fetching, and RSS add/sync.
+   - Remaining Android gap: richer edit UI/polish and manual device smoke testing on hardware/emulator.
 9. Testing and parity verification:
    - Add `commonTest` unit tests for converters and models.
    - Create byte-for-byte tests comparing RSVP output from Swift implementation vs Kotlin implementation using sample inputs from `docs/demo-books`.
-   - Add integration smoke tests for API calls against a running device or mocked server.
+   - Current parity gate: `RsvpDemoBookParityAndroidTest` verifies `docs/demo-books/european-letter-demo.rsvp` passes through byte-for-byte on Android/JVM tests.
+   - Mocked API smoke tests cover shared Ktor endpoint paths, query parameters, upload/delete contract, and response decoding.
+   - Mocked article fetch tests cover shared URL validation, fetch size guards, and HTML-to-readable-article formatting.
 10. Documentation & CI:
   - Document build steps, Xcode integration, and Android Gradle setup in `RSVPNanoCompanion/ios/README.md` and `RSVPNanoCompanion/android/README.md`.
    - Add CI jobs to build `shared` for Android and iOS and run `commonTest`.
@@ -42,7 +46,7 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift) — main UI + `NanoViewModel` to adapt to shared `SyncManager`.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift) — source of DTOs to port.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/NanoClient.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/NanoClient.swift) — REST endpoints to implement with Ktor.
-- [RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift) — platform storage adapter (iOS actual implementation).
+- [RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift) — thin Swift UI model/app-group constants; storage is owned by `shared`.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/RsvpConverter.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/RsvpConverter.swift) — complex parser & writer to port to `shared`.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/EpubConverter.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/EpubConverter.swift) — EPUB parsing to port.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/ArticleFormatter.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/ArticleFormatter.swift) — HTML extraction logic to port.
@@ -50,7 +54,7 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
 
 **Verification**
 1. Unit tests in `RSVPNanoCompanion/shared/commonTest` for `RsvpConverter`, `EpubConverter`, and `ArticleFormatter` matching Swift outputs.
-2. Binary parity: run converter on sample EPUB/RSVP in `RSVPNanoCompanion/docs/demo-books`, compare checksums to existing Swift-generated RSVP files.
+2. Binary parity: Android/JVM unit tests currently verify byte-for-byte pass-through for `RSVPNanoCompanion/docs/demo-books/european-letter-demo.rsvp`; add EPUB-to-RSVP golden vectors as sample EPUBs become available.
 3. Manual app smoke test on iOS: integrate `shared` framework, run app, upload book to device using existing pairing flow.
 4. Android smoke test: simple Compose screens call `shared` SyncManager to list `NanoBook` DTOs (mocked API), and create an RSVP from sample EPUB.
 5. CI: ensure Gradle builds for `android`, Kotlin `commonTest` passes, and `ios` XCFramework builds.
@@ -170,4 +174,4 @@ CI Checklist (first iteration):
 
 
 
-- Current constraint: the iOS Xcode project does not yet reference the Kotlin shared framework, so Swift adapter wiring is blocked until the build bridge is added.
+- Current constraint: iOS framework verification requires macOS/Xcode; local Windows verification covers shared Android compilation, shared unit tests, lint, and Android debug APK assembly.
