@@ -20,7 +20,7 @@ class RsvpSharedFacade(
     private val pendingUploadStore: PendingUploadStore,
     private val rssFeedStore: RssFeedStore,
     private val articleService: PendingUploadArticleService = PendingUploadArticleService(),
-    private val syncCoordinator: SyncCoordinator = SyncCoordinator(pendingUploadStore, rssFeedStore),
+    private val syncCoordinator: SyncCoordinator = SyncCoordinator(rssFeedStore),
 ) {
     private val pendingUploadRepository: PendingUploadRepository = PendingUploadRepository(pendingUploadStore, articleService)
     private val uploadSyncService: PendingUploadSyncService = PendingUploadSyncService(pendingUploadRepository, articleService)
