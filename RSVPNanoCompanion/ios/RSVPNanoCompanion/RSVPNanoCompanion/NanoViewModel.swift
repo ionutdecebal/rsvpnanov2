@@ -256,7 +256,7 @@ final class NanoViewModel: ObservableObject {
         Task {
             await run(booksToDelete.count == 1 ? "Deleting \(booksToDelete[0].displayTitle)" : "Deleting books") { [self] in
                 for book in booksToDelete {
-                    _ = try await deviceSyncService.deleteBook(baseUrl: self.address, filename: book.name)
+                    _ = try await deviceSyncService.deleteBook(baseUrl: self.address, filename: book.id)
                 }
                 self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
                 self.status = booksToDelete.count == 1 ? "Deleted \(booksToDelete[0].displayTitle)." : "Deleted books."

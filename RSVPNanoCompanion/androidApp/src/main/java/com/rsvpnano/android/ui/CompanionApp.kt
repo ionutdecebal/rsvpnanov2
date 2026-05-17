@@ -358,7 +358,7 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                 uiState = uiState.copy(status = "Connect to the reader before deleting books.")
                 return@launch
             }
-            val filename = book.apiName
+            val filename = book.id
             val title = book.displayTitle
             if (filename.isBlank()) {
                 uiState = uiState.copy(status = "Cannot delete a book without a device filename.")

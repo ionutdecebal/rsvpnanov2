@@ -88,7 +88,7 @@ Minimal `build.gradle.kts` snippet (conceptual)
 - Dependencies (commonMain): `implementation("io.ktor:ktor-client-core:2.x")`, `implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.x")`, `implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0")`
 
 Example DTO (`NanoBook`) for `commonMain` (concept)
-- `@Serializable data class NanoBook(val id: String? = null, val title: String, val author: String? = null, val progressPercent: Int? = null, val category: String? = null)`
+- `@Serializable data class NanoBook(val id: String, val title: String? = null, val author: String? = null, val bytes: Int = 0, val progressPercent: Int? = null, val category: String? = null)`
 
 Persistence Interface (common)
 - `interface PendingUploadStore { suspend fun loadAll(): List<PendingUpload>; suspend fun saveAll(items: List<PendingUpload>) }

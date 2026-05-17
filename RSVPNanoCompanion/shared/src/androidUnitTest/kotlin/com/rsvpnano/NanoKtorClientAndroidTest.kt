@@ -24,14 +24,16 @@ class NanoKtorClientAndroidTest {
             seen += "${request.method.value} ${request.url.encodedPath}"
             when (request.url.encodedPath) {
                 "/api/info" -> """{"name":"Nano"}"""
-                "/api/books" -> """{"books":[{"id":"1","title":"Book","category":"book"}]}"""
+                "/api/books" -> """{"books":[{"name":"books/Book.rsvp","title":"Book","category":"book"}]}"""
                 "/api/rss-feeds" -> """{"ok":true,"feeds":["https://example.com/feed"]}"""
                 else -> error("Unexpected request: ${request.url}")
             }
         })
 
         assertEquals("Nano", client.fetchInfo("http://device.local").name)
-        assertEquals("Book", client.listBooks("http://device.local").single().title)
+        val book = client.listBooks("http://device.local").single()
+        assertEquals("books/Book.rsvp", book.id)
+        assertEquals("Book", book.title)
         assertEquals(listOf("https://example.com/feed"), client.fetchRssFeeds("http://device.local").feeds)
         assertEquals(listOf("GET /api/info", "GET /api/books", "GET /api/rss-feeds"), seen)
     }

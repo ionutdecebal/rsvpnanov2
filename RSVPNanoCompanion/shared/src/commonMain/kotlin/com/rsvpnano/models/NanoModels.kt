@@ -4,25 +4,16 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class NanoBook(
-    val name: String = "",
-    val id: String? = null,
+    val id: String,
     val title: String? = null,
     val author: String? = null,
     val bytes: Int = 0,
     val progressPercent: Int? = null,
     val category: String? = null
 ) {
-    val apiName: String
-        get() = name.ifBlank { id.orEmpty() }
-
     val displayTitle: String
-        get() = title?.takeIf { it.isNotBlank() } ?: apiName.substringAfterLast('/').ifBlank { "Untitled" }
+        get() = title?.takeIf { it.isNotBlank() } ?: id.substringAfterLast('/').ifBlank { "Untitled" }
 }
-
-@Serializable
-data class NanoBooksResponse(
-    val books: List<NanoBook>,
-)
 
 @Serializable
 data class PendingUpload(

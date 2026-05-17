@@ -10,26 +10,24 @@ extension shared.NanoInfo {
 }
 
 extension shared.NanoBook: Identifiable {
-    public var id: String { apiName }
-
     var displayTitle: String {
         title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? title! : filename
     }
 
     var filename: String {
-        apiName.split(separator: "/").last.map(String.init) ?? apiName
+        id.split(separator: "/").last.map(String.init) ?? id
     }
 
     var detailLabel: String {
         let cleanedAuthor = author?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let pathLabel = displayTitle == filename ? nil : apiName
+        let pathLabel = displayTitle == filename ? nil : id
         return [cleanedAuthor.isEmpty ? nil : cleanedAuthor, pathLabel, byteLabel]
             .compactMap { $0 }
             .joined(separator: " · ")
     }
 
     var isArticle: Bool {
-        category == "article" || apiName.lowercased().hasPrefix("articles/")
+        category == "article" || id.lowercased().hasPrefix("articles/")
     }
 
     var byteLabel: String {
@@ -72,5 +70,4 @@ typealias NanoRssFeeds = shared.NanoRssFeeds
 typealias NanoWifiSettings = shared.NanoWifiSettings
 typealias NanoWifiUpdate = shared.NanoWifiUpdate
 typealias NanoSettings = shared.NanoSettings
-typealias NanoBooksResponse = shared.NanoBooksResponse
 typealias RsvpBookFile = shared.RsvpBookFile

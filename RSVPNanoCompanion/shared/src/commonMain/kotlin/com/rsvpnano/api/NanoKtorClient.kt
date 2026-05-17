@@ -1,7 +1,6 @@
 package com.rsvpnano.api
 
 import com.rsvpnano.models.NanoBook
-import com.rsvpnano.models.NanoBooksResponse
 import com.rsvpnano.models.NanoRssFeeds
 import com.rsvpnano.models.NanoInfo
 import com.rsvpnano.models.NanoSettings
@@ -26,6 +25,7 @@ import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
 
 class NanoKtorClient(
     private val httpClient: HttpClient,
@@ -40,8 +40,8 @@ class NanoKtorClient(
 
     override suspend fun listBooks(baseUrl: String): List<NanoBook> {
         val response = requestText(baseUrl, "api/books")
-        val wrapper = json.decodeFromString(NanoBooksResponse.serializer(), response)
-        return wrapper.books
+        val wrapper = json.decodeFromString(DeviceBooksResponse.serializer(), response)
+        return wrapper.books.map { it.toNanoBook() }
     }
 
     override suspend fun fetchSettings(baseUrl: String): NanoSettings =
@@ -143,5 +143,29 @@ class NanoKtorClient(
             throw NanoClientError(decoded?.error ?: "Device rejected request with HTTP $status")
         }
         return json.decodeFromString(serializer, body)
+    }
+
+    @Serializable
+    private data class DeviceBooksResponse(
+        val books: List<DeviceBook>,
+    )
+
+    @Serializable
+    private data class DeviceBook(
+        val name: String,
+        val title: String? = null,
+        val author: String? = null,
+        val bytes: Int = 0,
+        val progressPercent: Int? = null,
+        val category: String? = null,
+    ) {
+        fun toNanoBook(): NanoBook = NanoBook(
+            id = name,
+            title = title,
+            author = author,
+            bytes = bytes,
+            progressPercent = progressPercent,
+            category = category,
+        )
     }
 }
