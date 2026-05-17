@@ -25,6 +25,8 @@ inline bool isLowCustomSlotByte(uint8_t value) {
     case 0x13:
     case 0x14:
     case 0x15:
+    case 0x16:
+    case 0x17:
       return true;
     default:
       return false;
@@ -120,6 +122,12 @@ inline bool customSlotForCodepoint(uint32_t codepoint, uint8_t &slot) {
       return true;
     case 0x0171:
       slot = 0x15;
+      return true;
+    case 0x00A1:
+      slot = 0x16;
+      return true;
+    case 0x00BF:
+      slot = 0x17;
       return true;
     case 0x0152:
       slot = 0x80;
@@ -699,6 +707,10 @@ inline uint8_t fallbackAsciiByte(uint8_t value) {
     case 0xFB:
     case 0xFC:
       return 'u';
+    case 0x16:
+      return '!';
+    case 0x17:
+      return '?';
     case 0x12:
     case 0x80:
     case 0xD2:

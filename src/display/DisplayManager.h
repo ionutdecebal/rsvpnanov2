@@ -28,6 +28,19 @@ class DisplayManager {
     bool current = false;
   };
 
+  struct ReaderChrome {
+    ReaderChrome()
+        : showBattery(true),
+          showChapter(true),
+          showProgress(true),
+          showPreviousSentenceHint(true) {}
+
+    bool showBattery;
+    bool showChapter;
+    bool showProgress;
+    bool showPreviousSentenceHint;
+  };
+
   struct LibraryItem {
     String title;
     String subtitle;
@@ -61,19 +74,23 @@ class DisplayManager {
   void renderCenteredWord(const String &word, uint16_t color = 0xFFFF);
   void renderRsvpWord(const String &word, const String &chapterLabel = "",
                       uint8_t progressPercent = 0, bool showFooter = true,
-                      const String &footerStatusLabel = "");
+                      const String &footerStatusLabel = "",
+                      ReaderChrome chrome = ReaderChrome());
   void renderRsvpWordWithWpm(const String &word, uint16_t wpm, const String &chapterLabel = "",
                              uint8_t progressPercent = 0, bool showFooter = true,
-                             const String &footerStatusLabel = "");
+                             const String &footerStatusLabel = "",
+                             ReaderChrome chrome = ReaderChrome());
   void renderPhantomRsvpWord(const String &beforeText, const String &word, const String &afterText,
                              uint8_t fontSizeLevel, const String &chapterLabel = "",
                              uint8_t progressPercent = 0, bool showFooter = true,
-                             const String &footerStatusLabel = "");
+                             const String &footerStatusLabel = "",
+                             ReaderChrome chrome = ReaderChrome());
   void renderPhantomRsvpWordWithWpm(const String &beforeText, const String &word,
                                     const String &afterText, uint8_t fontSizeLevel, uint16_t wpm,
                                     const String &chapterLabel = "",
                                     uint8_t progressPercent = 0, bool showFooter = true,
-                                    const String &footerStatusLabel = "");
+                                    const String &footerStatusLabel = "",
+                                    ReaderChrome chrome = ReaderChrome());
   void renderTypographyPreview(const String &beforeText, const String &word, const String &afterText,
                                uint8_t fontSizeLevel, const String &title,
                                const String &line1 = "", const String &line2 = "");
@@ -81,11 +98,13 @@ class DisplayManager {
                         size_t windowStartIndex, size_t currentWordIndex,
                         uint16_t scrollProgressPermille = 0, const String &chapterLabel = "",
                         uint8_t progressPercent = 0, const String &overlayText = "",
-                        const String &footerStatusLabel = "");
+                        const String &footerStatusLabel = "",
+                        ReaderChrome chrome = ReaderChrome());
   void renderWordTickerView(const std::vector<ContextWord> &words, size_t currentWordIndex,
                             uint8_t fontSizeLevel, uint16_t motionPermille = 0,
                             const String &chapterLabel = "", uint8_t progressPercent = 0,
-                            const String &overlayText = "", bool showFooter = true);
+                            const String &overlayText = "", bool showFooter = true,
+                            ReaderChrome chrome = ReaderChrome());
   void renderMenu(const char *const *items, size_t itemCount, size_t selectedIndex);
   void renderMenu(const std::vector<String> &items, size_t selectedIndex);
   void renderLibrary(const std::vector<LibraryItem> &items, size_t selectedIndex);
@@ -94,6 +113,9 @@ class DisplayManager {
   void renderStatus(const String &title, const String &line1 = "", const String &line2 = "");
   void renderProgress(const String &title, const String &line1 = "", const String &line2 = "",
                       int progressPercent = -1);
+  void renderLifeScreensaver(const std::vector<uint32_t> &cells, uint16_t columns, uint16_t rows,
+                             uint32_t generation,
+                             const std::vector<uint32_t> *dimCells = nullptr);
   void renderFocusTimerScreen(const String &mode, const String &genre, const String &timer,
                               const String &instruction, const String &footer = "",
                               int progressPercent = -1, bool breakAccent = false);
@@ -148,7 +170,8 @@ class DisplayManager {
   void drawBatteryBadge();
   void drawBatteryBadge(int logicalWidth, int logicalHeight);
   void drawPreviousSentenceHint();
-  void drawFooter(const String &chapterLabel, const String &statusLabel);
+  void drawFooter(const String &chapterLabel, const String &statusLabel,
+                  const ReaderChrome &chrome);
   void drawRsvpAnchorGuide(int anchorX, int textY, int textHeight);
   void drawWordAt(const String &word, int x, int y, uint16_t color);
   void drawRsvpWordAt(const String &word, int x, int y, int focusIndex);

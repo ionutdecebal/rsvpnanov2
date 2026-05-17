@@ -169,6 +169,7 @@ OTA updates use GitHub Releases. Open `Settings -> Firmware update` on the devic
 - `PWR` hold from the normal reader or main menu: power off.
 - `BOOT` short press: cycle brightness.
 - `BOOT` hold: cycle display theme.
+- Press `PWR` + `BOOT` together: enter standby with the pixel-level Game of Life screen saver. Press either button to wake.
 
 The goal is simple: use `PWR` as menu, back, exit, and power. Use `BOOT` for quick display changes.
 
@@ -185,6 +186,7 @@ The goal is simple: use `PWR` as menu, back, exit, and power. Use `BOOT` for qui
 - Swipe up while paused: increase WPM.
 - Swipe down while paused: decrease WPM.
 - Tap the bottom-right footer label: switch between progress, chapter time remaining, book time remaining, and battery display modes.
+- Tap the top-right battery label: switch between percentage, time remaining, and voltage.
 
 Pause behavior is configurable. In `Settings -> Word pacing`, choose whether taps pause instantly or at the end of the sentence.
 
@@ -231,6 +233,7 @@ Settings are grouped by how people actually use the device.
 - Display theme.
 - Brightness.
 - Footer and battery label behavior.
+- Optional battery, chapter, and book percentage labels while actively reading.
 - Language.
 
 `Typography` includes:
@@ -286,6 +289,8 @@ Always eject before leaving USB transfer mode where possible.
 Use the web companion or iPhone app to manage feed URLs. Then run `RSS feeds` from the device menu.
 
 The device shows live progress as it checks feeds. Saved articles appear in `Articles`.
+
+If a feed cannot be downloaded, the reader shows a plain-English reason such as `Feed not found`, `Site blocked reader`, or `Site took too long`.
 
 ### Focus Timer
 

@@ -38,7 +38,7 @@ class IndexedBookStore : public BookWordSource {
   };
 
   static constexpr uint32_t kMagic = 0x58444952UL;  // RIDX
-  static constexpr uint32_t kVersion = 1;
+  static constexpr uint32_t kVersion = 4;
   static constexpr size_t kWordCacheSize = 256;
 
   IndexedBookStore() = default;

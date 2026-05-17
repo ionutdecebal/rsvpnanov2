@@ -100,6 +100,9 @@ struct NanoSettings: Codable {
         var handedness: String
         var footerMetric: String
         var batteryLabel: String
+        var readingBattery: Bool
+        var readingChapter: Bool
+        var readingProgress: Bool
         var language: Int
         var phantomWords: Bool
         var fontSizeIndex: Int

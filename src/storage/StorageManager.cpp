@@ -93,8 +93,58 @@ void trimAsciiWhitespace(String &text) {
 
 bool isWordBoundary(char c) {
   const uint8_t value = LatinText::byteValue(c);
-  return value <= ' ' && !LatinText::isWordCharacter(value);
+  return value <= ' ' && !LatinText::isWordCharacter(value) &&
+         !LatinText::isLowCustomSlotByte(value);
 }
+
+bool isReadableTokenChar(char c) {
+  return LatinText::isWordCharacter(LatinText::byteValue(c));
+}
+
+bool isInlineWordHyphen(const String &text, size_t index) {
+  if (index == 0 || index + 1 >= text.length() || text[index] != '-') {
+    return false;
+  }
+  if (text[index - 1] == '-' || text[index + 1] == '-') {
+    return false;
+  }
+  return isReadableTokenChar(text[index - 1]) && isReadableTokenChar(text[index + 1]);
+}
+
+bool tokenHasReadableCharacter(const String &token) {
+  for (size_t i = 0; i < token.length(); ++i) {
+    if (isReadableTokenChar(token[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool isHyphenToken(const String &token) {
+  if (token.isEmpty()) {
+    return false;
+  }
+  for (size_t i = 0; i < token.length(); ++i) {
+    if (token[i] != '-') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isEllipsisToken(const String &token) {
+  if (token.length() < 3) {
+    return false;
+  }
+  for (size_t i = 0; i < token.length(); ++i) {
+    if (token[i] != '.') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isStandaloneRhythmToken(const String &token) { return isHyphenToken(token); }
 
 bool prefixHasBoundary(const String &lowered, const char *prefix) {
   const size_t prefixLength = std::strlen(prefix);
@@ -730,11 +780,15 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
       return;
     case 0x2010:
     case 0x2011:
+      target += '-';
+      return;
     case 0x2012:
     case 0x2013:
     case 0x2014:
     case 0x2015:
     case 0x2043:
+      appendText(target, " - ");
+      return;
     case 0x2212:
       target += '-';
       return;
@@ -1198,7 +1252,8 @@ String normalizeDisplayText(const String &text, ParseStats *stats = nullptr) {
   bool previousSpace = true;
   for (size_t i = 0; i < normalized.length(); ++i) {
     const uint8_t value = LatinText::byteValue(normalized[i]);
-    if (value <= ' ' && !LatinText::isWordCharacter(value)) {
+    if (value <= ' ' && !LatinText::isWordCharacter(value) &&
+        !LatinText::isLowCustomSlotByte(value)) {
       if (!previousSpace) {
         collapsed += ' ';
         previousSpace = true;
@@ -1216,6 +1271,111 @@ String normalizeDisplayText(const String &text, ParseStats *stats = nullptr) {
   return collapsed;
 }
 
+template <typename PushToken, typename WordCount>
+bool appendTokenizedLineWords(const String &line, PushToken pushToken, WordCount wordCount,
+                              ParseStats *stats) {
+  const String normalizedLine = normalizeDisplayText(line, stats);
+  String currentWord;
+  String pendingToken;
+  currentWord.reserve(32);
+  pendingToken.reserve(32);
+
+  auto flushPending = [&]() -> bool {
+    if (pendingToken.isEmpty()) {
+      return true;
+    }
+    if (!pushToken(pendingToken)) {
+      return false;
+    }
+    pendingToken = "";
+    return !reachedBookWordLimit(wordCount());
+  };
+
+  auto finishToken = [&](String token) -> bool {
+    trimAsciiWhitespace(token);
+    if (token.isEmpty()) {
+      return true;
+    }
+
+    if (isEllipsisToken(token)) {
+      if (!pendingToken.isEmpty()) {
+        pendingToken += "...";
+      }
+      return true;
+    }
+
+    if (isHyphenToken(token)) {
+      if (!flushPending()) {
+        return false;
+      }
+      if (!pushToken("-")) {
+        return false;
+      }
+      return !reachedBookWordLimit(wordCount());
+    }
+
+    if (!flushPending()) {
+      return false;
+    }
+    pendingToken = token;
+    return true;
+  };
+
+  auto flushCurrent = [&]() -> bool {
+    if (currentWord.isEmpty()) {
+      return true;
+    }
+    const bool ok = finishToken(currentWord);
+    currentWord = "";
+    return ok;
+  };
+
+  for (size_t i = 0; i < normalizedLine.length(); ++i) {
+    const char c = normalizedLine[i];
+    if (isWordBoundary(c)) {
+      if (!flushCurrent()) {
+        return false;
+      }
+      continue;
+    }
+
+    if (c == '-') {
+      if (isInlineWordHyphen(normalizedLine, i)) {
+        currentWord += c;
+        continue;
+      }
+      if (!flushCurrent() || !finishToken("-")) {
+        return false;
+      }
+      while (i + 1 < normalizedLine.length() && normalizedLine[i + 1] == '-') {
+        ++i;
+      }
+      continue;
+    }
+
+    if (c == '.' && i + 2 < normalizedLine.length() && normalizedLine[i + 1] == '.' &&
+        normalizedLine[i + 2] == '.') {
+      currentWord += "...";
+      i += 2;
+      while (i + 1 < normalizedLine.length() && normalizedLine[i + 1] == '.') {
+        ++i;
+      }
+      if (!flushCurrent()) {
+        return false;
+      }
+      continue;
+    }
+
+    currentWord += c;
+  }
+
+  if (!flushCurrent()) {
+    return false;
+  }
+
+  return flushPending();
+}
+
 bool pushCleanWord(String token, std::vector<String> &words, ParseStats *stats) {
   trimAsciiWhitespace(token);
 
@@ -1226,15 +1386,8 @@ bool pushCleanWord(String token, std::vector<String> &words, ParseStats *stats) 
 
   trimAsciiWhitespace(token);
 
-  bool hasAlphaNumeric = false;
-  for (size_t i = 0; i < token.length(); ++i) {
-    if (LatinText::isWordCharacter(LatinText::byteValue(token[i]))) {
-      hasAlphaNumeric = true;
-      break;
-    }
-  }
-
-  if (token.isEmpty() || !hasAlphaNumeric) {
+  if (token.isEmpty() ||
+      (!tokenHasReadableCharacter(token) && !isStandaloneRhythmToken(token))) {
     return true;
   }
 
@@ -1325,35 +1478,9 @@ String directiveValue(const String &line, const char *directive) {
 }
 
 bool appendLineWords(const String &line, std::vector<String> &words, ParseStats *stats) {
-  const String normalizedLine = normalizeDisplayText(line, stats);
-  String currentWord;
-  currentWord.reserve(32);
-
-  for (size_t i = 0; i < normalizedLine.length(); ++i) {
-    const char c = normalizedLine[i];
-    if (isWordBoundary(c)) {
-      if (!currentWord.isEmpty()) {
-        if (!pushCleanWord(currentWord, words, stats)) {
-          return false;
-        }
-        currentWord = "";
-        if (reachedBookWordLimit(words.size())) {
-          return false;
-        }
-      }
-      continue;
-    }
-
-    currentWord += c;
-  }
-
-  if (!currentWord.isEmpty() && !reachedBookWordLimit(words.size())) {
-    if (!pushCleanWord(currentWord, words, stats)) {
-      return false;
-    }
-  }
-
-  return !reachedBookWordLimit(words.size());
+  return appendTokenizedLineWords(
+      line, [&](const String &token) { return pushCleanWord(token, words, stats); },
+      [&]() { return words.size(); }, stats);
 }
 
 bool processBookLine(const String &line, BookContent &book, bool &paragraphPending,
@@ -1678,15 +1805,8 @@ bool pushIndexedWord(String token, IndexedBuildContext &context, ParseStats *sta
 
   trimAsciiWhitespace(token);
 
-  bool hasAlphaNumeric = false;
-  for (size_t i = 0; i < token.length(); ++i) {
-    if (LatinText::isWordCharacter(LatinText::byteValue(token[i]))) {
-      hasAlphaNumeric = true;
-      break;
-    }
-  }
-
-  if (token.isEmpty() || !hasAlphaNumeric) {
+  if (token.isEmpty() ||
+      (!tokenHasReadableCharacter(token) && !isStandaloneRhythmToken(token))) {
     return true;
   }
 
@@ -1728,35 +1848,9 @@ bool pushIndexedWord(String token, IndexedBuildContext &context, ParseStats *sta
 }
 
 bool appendIndexedLineWords(const String &line, IndexedBuildContext &context, ParseStats *stats) {
-  const String normalizedLine = normalizeDisplayText(line, stats);
-  String currentWord;
-  currentWord.reserve(32);
-
-  for (size_t i = 0; i < normalizedLine.length(); ++i) {
-    const char c = normalizedLine[i];
-    if (isWordBoundary(c)) {
-      if (!currentWord.isEmpty()) {
-        if (!pushIndexedWord(currentWord, context, stats)) {
-          return false;
-        }
-        currentWord = "";
-        if (reachedBookWordLimit(context.wordCount)) {
-          return false;
-        }
-      }
-      continue;
-    }
-
-    currentWord += c;
-  }
-
-  if (!currentWord.isEmpty() && !reachedBookWordLimit(context.wordCount)) {
-    if (!pushIndexedWord(currentWord, context, stats)) {
-      return false;
-    }
-  }
-
-  return !reachedBookWordLimit(context.wordCount);
+  return appendTokenizedLineWords(
+      line, [&](const String &token) { return pushIndexedWord(token, context, stats); },
+      [&]() { return static_cast<size_t>(context.wordCount); }, stats);
 }
 
 bool processIndexedBookLine(const String &line, IndexedBuildContext &context,

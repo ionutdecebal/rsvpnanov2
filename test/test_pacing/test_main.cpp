@@ -164,6 +164,11 @@ void test_dash_pause(void) {
   TEST_ASSERT_EQUAL(320u, duration(300, "so-", "the"));
 }
 
+void test_standalone_dash_pause(void) {
+  // Parser-level hyphen splitting can produce "-" as its own displayed token.
+  TEST_ASSERT_EQUAL(320u, duration(300, "-", "the"));
+}
+
 void test_ellipsis_pause(void) {
   // "and..." → ellipsis +110% → 200 + 220 = 420
   TEST_ASSERT_EQUAL(420u, duration(300, "and...", "then"));
@@ -276,6 +281,17 @@ void test_ascii_fallback_maps_hungarian_double_acute_to_base_letter(void) {
 
 void test_ascii_fallback_maps_spanish_enye_to_base_letter(void) {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('n'), LatinText::fallbackAsciiByte(0xF1));
+}
+
+void test_spanish_inverted_punctuation_uses_custom_slots(void) {
+  uint8_t slot = 0;
+  TEST_ASSERT_TRUE(LatinText::storageByteForCodepoint(0x00BF, slot));
+  TEST_ASSERT_EQUAL_UINT8(0x17, slot);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('?'), LatinText::fallbackAsciiByte(slot));
+
+  TEST_ASSERT_TRUE(LatinText::storageByteForCodepoint(0x00A1, slot));
+  TEST_ASSERT_EQUAL_UINT8(0x16, slot);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('!'), LatinText::fallbackAsciiByte(slot));
 }
 
 void test_very_long_word_extra_tier(void) {
@@ -543,6 +559,7 @@ int main(void) {
   RUN_TEST(test_sentence_pause_preserved_with_closing_parenthesis);
   RUN_TEST(test_clause_pause_semicolon);
   RUN_TEST(test_dash_pause);
+  RUN_TEST(test_standalone_dash_pause);
   RUN_TEST(test_ellipsis_pause);
 
   RUN_TEST(test_known_abbreviation_no_pause);
@@ -565,6 +582,7 @@ int main(void) {
   RUN_TEST(test_ascii_fallback_maps_accented_latin_to_base_letter);
   RUN_TEST(test_ascii_fallback_maps_hungarian_double_acute_to_base_letter);
   RUN_TEST(test_ascii_fallback_maps_spanish_enye_to_base_letter);
+  RUN_TEST(test_spanish_inverted_punctuation_uses_custom_slots);
   RUN_TEST(test_very_long_word_extra_tier);
   RUN_TEST(test_compound_word_bonus);
   RUN_TEST(test_all_caps_complexity);

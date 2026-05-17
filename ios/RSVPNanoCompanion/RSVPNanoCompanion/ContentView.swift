@@ -761,10 +761,20 @@ struct ContentView: View {
                     Picker("Battery Label", selection: batteryLabelBinding(for: settings)) {
                         Text("Percentage").tag("percent")
                         Text("Time Remaining").tag("time_remaining")
+                        Text("Voltage").tag("voltage")
                     }
                     .pickerStyle(.segmented)
                 }
                 .disabled(viewModel.isBusy)
+
+                Toggle("Show Battery While Reading", isOn: readingBatteryBinding(for: settings))
+                    .disabled(viewModel.isBusy)
+
+                Toggle("Show Chapter While Reading", isOn: readingChapterBinding(for: settings))
+                    .disabled(viewModel.isBusy)
+
+                Toggle("Show Book Percent While Reading", isOn: readingProgressBinding(for: settings))
+                    .disabled(viewModel.isBusy)
             }
         }
     }
@@ -1340,6 +1350,39 @@ struct ContentView: View {
             set: { value in
                 guard var next = viewModel.deviceSettings else { return }
                 next.display.batteryLabel = value
+                viewModel.saveSettings(next)
+            }
+        )
+    }
+
+    private func readingBatteryBinding(for settings: NanoSettings) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.deviceSettings?.display.readingBattery ?? settings.display.readingBattery },
+            set: { value in
+                guard var next = viewModel.deviceSettings else { return }
+                next.display.readingBattery = value
+                viewModel.saveSettings(next)
+            }
+        )
+    }
+
+    private func readingChapterBinding(for settings: NanoSettings) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.deviceSettings?.display.readingChapter ?? settings.display.readingChapter },
+            set: { value in
+                guard var next = viewModel.deviceSettings else { return }
+                next.display.readingChapter = value
+                viewModel.saveSettings(next)
+            }
+        )
+    }
+
+    private func readingProgressBinding(for settings: NanoSettings) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.deviceSettings?.display.readingProgress ?? settings.display.readingProgress },
+            set: { value in
+                guard var next = viewModel.deviceSettings else { return }
+                next.display.readingProgress = value
                 viewModel.saveSettings(next)
             }
         )
