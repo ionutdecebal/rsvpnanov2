@@ -6,6 +6,7 @@ import shared
 final class NanoViewModel: ObservableObject {
     private let sharedFacade = IosSharedWiringKt.createIosSharedFacade(appGroupIdentifier: SharedInbox.appGroupIdentifier)
     private let deviceSyncService = IosSharedWiringKt.createIosDeviceSyncService()
+    private let companionController = IosSharedWiringKt.createIosCompanionController(appGroupIdentifier: SharedInbox.appGroupIdentifier)
     private let sharedDateFormatter = ISO8601DateFormatter()
     private let sharedFallbackDateFormatter = ISO8601DateFormatter()
 
@@ -54,11 +55,13 @@ final class NanoViewModel: ObservableObject {
     }
 
     func startAutoConnect() async {
-        await refreshPendingUploads()
         do {
-            rssFeeds = try await sharedFacade.loadRssFeeds()
+            let local = try await companionController.refreshLocal()
+            pendingUploads = local.drafts.map(pendingUpload(from:))
+            rssFeeds = local.rssFeeds
         } catch {
             lastConnectionError = error.localizedDescription
+            pendingUploads = []
             rssFeeds = []
         }
     }
@@ -75,15 +78,15 @@ final class NanoViewModel: ObservableObject {
     func refreshBooks() {
         Task {
             await run("Refreshing") { [self] in
-                self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
-                self.deviceSettings = try? await deviceSyncService.refreshSettings(baseUrl: self.address)
-                if let wifi = try? await deviceSyncService.refreshWifiSettings(baseUrl: self.address) {
+                let snapshot = try await companionController.refreshDevice(baseUrl: self.address, localRssFeeds: self.rssFeeds)
+                self.books = snapshot.books
+                self.deviceSettings = snapshot.settings
+                if let wifi = snapshot.wifiSettings {
                     self.applyWifiSettings(wifi)
                 }
-                if let deviceFeeds = try? await deviceSyncService.refreshRssFeeds(baseUrl: self.address).feeds {
-                    self.mergeRssFeedsFromDevice(deviceFeeds)
-                }
-                await self.refreshPendingUploads()
+                self.syncedRssFeeds = snapshot.syncedRssFeeds
+                self.rssFeeds = snapshot.rssFeeds
+                self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
                 self.status = "Library refreshed from the SD card."
             }
         }
@@ -321,11 +324,12 @@ final class NanoViewModel: ObservableObject {
         let items = pendingUploads
         Task {
             await run(items.count == 1 ? "Syncing \(items[0].title)" : "Syncing saved articles") { [self] in
-                for item in items {
-                    try await self.uploadPendingItem(item)
-                }
-                self.pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
-                self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
+                let snapshot = try await companionController.syncPendingUploads(
+                    baseUrl: self.address,
+                    items: items.map(sharedPendingUpload(from:))
+                )
+                self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
+                self.books = snapshot.books
                 self.status = items.count == 1 ? "Synced \(items[0].title)." : "Synced saved articles."
             }
         }
@@ -334,9 +338,12 @@ final class NanoViewModel: ObservableObject {
     func syncPendingUpload(_ item: PendingUpload) {
         Task {
             await run("Syncing \(item.title)") { [self] in
-                try await self.uploadPendingItem(item)
-                self.pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
-                self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
+                let snapshot = try await companionController.syncPendingUploads(
+                    baseUrl: self.address,
+                    items: [self.sharedPendingUpload(from: item)]
+                )
+                self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
+                self.books = snapshot.books
                 self.status = "Synced \(item.title)."
             }
         }
@@ -360,15 +367,17 @@ final class NanoViewModel: ObservableObject {
     private func connectOnce(showBusy: Bool = true) async -> Bool {
         await run("Looking for RSVP Nano", showBusy: showBusy) { [self] in
             self.hasAttemptedConnection = true
-            let snapshot = try await deviceSyncService.connect(baseUrl: self.address)
-            self.info = snapshot.info
-            self.books = snapshot.books
-            self.deviceSettings = snapshot.settings
-            if let wifi = snapshot.wifiSettings {
+            let snapshot = try await companionController.connect(baseUrl: self.address, localRssFeeds: self.rssFeeds)
+            let device = snapshot.device
+            self.info = device.info
+            self.books = device.books
+            self.deviceSettings = device.settings
+            if let wifi = device.wifiSettings {
                 self.applyWifiSettings(wifi)
             }
-            self.mergeRssFeedsFromDevice(snapshot.rssFeeds?.feeds ?? [])
-            await self.refreshPendingUploads()
+            self.rssFeeds = snapshot.rssFeeds
+            self.syncedRssFeeds = self.sharedFacade.mergeRssFeeds(localFeeds: [], deviceFeeds: device.rssFeeds?.feeds ?? [])
+            self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
             self.lastConnectionError = nil
             self.status = "Connected to \(self.info?.name ?? "RSVP Nano"). Reading /books."
         }
@@ -379,12 +388,6 @@ final class NanoViewModel: ObservableObject {
         _ = try await deviceSyncService.uploadBook(baseUrl: self.address, filename: file.filename, data: file.data, category: "book")
         self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
         self.status = uploadStatus(for: file)
-    }
-
-    private func uploadPendingItem(_ item: PendingUpload) async throws {
-        let sharedFile = sharedFacade.bookFileFor(item: sharedPendingUpload(from: item))
-        _ = try await deviceSyncService.uploadBook(baseUrl: self.address, filename: sharedFile.filename, data: sharedFile.data, category: "article")
-        try await sharedFacade.deleteDraft(item: sharedPendingUpload(from: item))
     }
 
     private func run(_ busyStatus: String, showBusy: Bool = true, operation: @escaping () async throws -> Void) async {

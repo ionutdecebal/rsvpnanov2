@@ -44,4 +44,13 @@ data class RsvpSharedDependencies(
     fun createDeviceSyncService(client: NanoClient): NanoDeviceSyncService {
         return NanoDeviceSyncService(client)
     }
+
+    fun createCompanionController(facade: RsvpSharedFacade = createFacade()): NanoCompanionController {
+        val client = nanoClient ?: throw IllegalStateException("NanoClient not provided to dependencies")
+        return NanoCompanionController(
+            facade = facade,
+            deviceSyncService = NanoDeviceSyncService(client),
+            client = client,
+        )
+    }
 }

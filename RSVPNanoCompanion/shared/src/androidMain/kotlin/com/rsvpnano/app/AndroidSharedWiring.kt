@@ -51,6 +51,12 @@ fun createAndroidDeviceSyncService(): NanoDeviceSyncService {
     return NanoDeviceSyncService(createAndroidNanoClient())
 }
 
+fun createAndroidCompanionController(
+    appFilesDir: File,
+): NanoCompanionController {
+    return createAndroidSharedDependencies(appFilesDir).createCompanionController()
+}
+
 fun createAndroidArticleFetchClient(): ArticleFetchClient {
     return ArticleFetchClient(createAndroidHttpClient())
 }

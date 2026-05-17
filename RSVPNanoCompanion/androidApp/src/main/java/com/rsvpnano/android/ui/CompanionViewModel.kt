@@ -41,6 +41,7 @@ class CompanionViewModel(
     private val sharedApp: RsvpSharedApp,
 ) : ViewModel() {
     private val deviceSyncService: NanoDeviceSyncService = sharedApp.deviceSyncService
+    private val companionController = sharedApp.companionController
     private val _uiState = MutableStateFlow(CompanionUiState(status = "Loading shared data..."))
     val uiState: StateFlow<CompanionUiState> = _uiState
 
@@ -69,36 +70,38 @@ class CompanionViewModel(
     fun refresh() {
         viewModelScope.launch {
             setStatus("Refreshing...")
-            val drafts = sharedApp.facade.loadDrafts()
-            val feeds = sharedApp.facade.loadRssFeeds()
-            updateState { it.copy(drafts = drafts, rssFeeds = feeds, status = "Loaded ${drafts.size} drafts.") }
+            val local = companionController.refreshLocal()
+            updateState {
+                it.copy(
+                    drafts = local.drafts,
+                    rssFeeds = local.rssFeeds,
+                    status = "Loaded ${local.drafts.size} drafts.",
+                )
+            }
         }
     }
 
     fun connect() {
         viewModelScope.launch {
             setStatus("Connecting...")
-            runCatching { deviceSyncService.connect(current.address) }
+            val state = current
+            runCatching { companionController.connect(state.address, state.rssFeeds) }
                 .onSuccess { snapshot ->
-                    val deviceName = snapshot.info?.name ?: "RSVP Nano"
-                    val mergedFeeds = sharedApp.facade.saveRssFeeds(
-                        sharedApp.facade.mergeRssFeeds(
-                            localFeeds = current.rssFeeds,
-                            deviceFeeds = snapshot.rssFeeds?.feeds.orEmpty(),
-                        )
-                    )
+                    val device = snapshot.device
+                    val deviceName = device.info?.name ?: "RSVP Nano"
                     updateState {
                         it.copy(
-                            books = snapshot.books,
-                            settings = snapshot.settings,
-                            wifiSettings = snapshot.wifiSettings,
-                            settingsWpmDraft = snapshot.settings?.reading?.wpm?.toString().orEmpty(),
-                            settingsBrightnessDraft = snapshot.settings?.display?.brightnessIndex?.toString().orEmpty(),
-                            wifiSsidDraft = snapshot.wifiSettings?.ssid.orEmpty(),
+                            books = device.books,
+                            settings = device.settings,
+                            wifiSettings = device.wifiSettings,
+                            settingsWpmDraft = device.settings?.reading?.wpm?.toString().orEmpty(),
+                            settingsBrightnessDraft = device.settings?.display?.brightnessIndex?.toString().orEmpty(),
+                            wifiSsidDraft = device.wifiSettings?.ssid.orEmpty(),
                             wifiPasswordDraft = "",
-                            rssFeeds = mergedFeeds,
-                            isConnected = snapshot.info != null,
-                            status = "Connected to $deviceName. Loaded ${snapshot.books.size} books.",
+                            rssFeeds = snapshot.rssFeeds,
+                            drafts = snapshot.drafts,
+                            isConnected = device.info != null,
+                            status = "Connected to $deviceName. Loaded ${device.books.size} books.",
                         )
                     }
                 }
@@ -334,25 +337,18 @@ class CompanionViewModel(
                 setStatus("No text drafts are ready to sync.")
                 return@launch
             }
-            val client = sharedApp.nanoClient ?: run {
-                setStatus("NanoClient not available.")
-                return@launch
-            }
             setStatus("Syncing saved articles...")
             runCatching {
-                val remaining = sharedApp.facade.syncPendingUploads(
-                    client = client,
+                companionController.syncPendingUploads(
                     baseUrl = state.address,
                     items = readyDrafts,
                 )
-                val books = deviceSyncService.refreshBooks(state.address)
-                remaining to books
-            }.onSuccess { (remaining, books) ->
+            }.onSuccess { synced ->
                 updateState {
                     it.copy(
-                        drafts = remaining,
-                        books = books,
-                        status = "Synced ${readyDrafts.size} saved articles.",
+                        drafts = synced.drafts,
+                        books = synced.books,
+                        status = "Synced ${synced.syncedCount} saved articles.",
                     )
                 }
             }.onFailure { error ->

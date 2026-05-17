@@ -51,6 +51,12 @@ fun createIosDeviceSyncService(): NanoDeviceSyncService {
     return NanoDeviceSyncService(createIosNanoClient())
 }
 
+fun createIosCompanionController(
+    appGroupIdentifier: String = DefaultAppGroupIdentifier,
+): NanoCompanionController {
+    return createIosSharedDependencies(appGroupIdentifier).createCompanionController()
+}
+
 fun createIosArticleFetchClient(): ArticleFetchClient {
     return ArticleFetchClient(createIosHttpClient())
 }
