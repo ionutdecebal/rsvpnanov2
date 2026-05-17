@@ -4,9 +4,9 @@ import com.rsvpnano.api.NanoClient
 import com.rsvpnano.app.RsvpSharedDependencies
 import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoInfo
+import com.rsvpnano.models.NanoUploadResponse
 import com.rsvpnano.models.NanoRssFeeds
 import com.rsvpnano.models.NanoSettings
-import com.rsvpnano.models.NanoUploadResponse
 import com.rsvpnano.models.NanoWifiSettings
 import com.rsvpnano.persistence.PendingUploadStorage
 import com.rsvpnano.persistence.RssFeedStorage
@@ -41,7 +41,8 @@ class RsvpSharedDependenciesDeviceTest {
         override suspend fun forgetWifi(baseUrl: String): NanoWifiSettings = NanoWifiSettings(ok = true, configured = false, ssid = "", passwordSet = false)
         override suspend fun fetchRssFeeds(baseUrl: String): NanoRssFeeds = NanoRssFeeds(ok = true, feeds = emptyList())
         override suspend fun updateRssFeeds(baseUrl: String, feeds: List<String>): NanoRssFeeds = NanoRssFeeds(ok = true, feeds = feeds)
-        override suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String?): NanoBook = NanoBook(id = name, title = name, category = category)
+        override suspend fun uploadBook(baseUrl: String, name: String, data: ByteArray, category: String?): NanoUploadResponse =
+            NanoUploadResponse(ok = true, path = "/books/$name")
         override suspend fun deleteBook(baseUrl: String, name: String): NanoUploadResponse = NanoUploadResponse(ok = true)
     }
 
