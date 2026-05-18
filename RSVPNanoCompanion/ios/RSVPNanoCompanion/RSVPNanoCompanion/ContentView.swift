@@ -115,7 +115,7 @@ struct ContentView: View {
         case .settings:
             settingsPage
         case .help:
-            helpPage
+            HelpPage()
         }
     }
 
@@ -747,79 +747,6 @@ struct ContentView: View {
         }
     }
 
-    private var helpPage: some View {
-        List {
-            Section("Connection") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Open Companion sync", systemImage: "wifi")
-                    Text("On RSVP Nano, open the main menu and choose Companion sync. Join the RSVP-Nano Wi-Fi network on your iPhone, then return to the app.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Refresh after uploading", systemImage: "arrow.triangle.2.circlepath")
-                    Text("After uploading, hold BOOT on the reader to exit Companion sync and refresh the on-device library.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("SD Card") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Recommended card", systemImage: "sdcard")
-                    Text("Use a known-good microSD card. 8-32 GB is the most conservative range, and 64 GB cards can work well when formatted as FAT32 with a single partition.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Best file format", systemImage: "doc.text")
-                    Text("The app uploads .rsvp files when it can. New books go in /books/books, shared and RSS articles go in /books/articles, and older files directly in /books still work.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("If the card fails", systemImage: "exclamationmark.triangle")
-                    Text("The usual causes are exFAT formatting, a missing /books folder, the card not being seated fully, a tired or counterfeit card, or files with unsupported extensions.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Try another card", systemImage: "arrow.uturn.forward")
-                    Text("Intermittent mounts or failed writes usually point to a worn, counterfeit, or marginal card. A smaller brand-name card is often more reliable.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Articles") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Safari and Chrome behave differently", systemImage: "safari")
-                    Text("Chrome often shares a title immediately. Safari is handled as URL-first for stability, then the app fetches the article text and title after saving.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Large pages", systemImage: "doc.text.magnifyingglass")
-                    Text("Very large pages may be rejected during article fetch so the app stays responsive.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("RSS feeds", systemImage: "dot.radiowaves.left.and.right")
-                    Text("Add feed URLs from the Articles page while connected to Companion sync. The reader saves them to /config/rss.conf and can check them from its main menu when Wi-Fi is configured.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
     private var statusBar: some View {
         HStack(spacing: 8) {
             if viewModel.isBusy {
@@ -1056,72 +983,4 @@ struct ContentView: View {
         )
     }
 
-}
-
-struct ArticleEditorView: View {
-    let item: PendingUpload
-    var onSave: (String, String) -> Void
-    var onCancel: () -> Void
-
-    @State private var title: String
-    @State private var articleBody: String
-
-    init(item: PendingUpload, onSave: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
-        self.item = item
-        self.onSave = onSave
-        self.onCancel = onCancel
-        _title = State(initialValue: item.title)
-        _articleBody = State(initialValue: item.needsArticleFetch ? "" : item.body)
-    }
-
-    private var wordCount: Int {
-        articleBody.split { $0.isWhitespace }.count
-    }
-
-    private var canSave: Bool {
-        !articleBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Title") {
-                    TextField("Article title", text: $title)
-                }
-
-                if !item.source.isEmpty {
-                    Section("Source") {
-                        Text(item.source)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Section {
-                    TextEditor(text: $articleBody)
-                        .frame(minHeight: 320)
-                        .font(.body)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Article")
-                } footer: {
-                    Text(item.needsArticleFetch ? "Fetch article text first, or paste text here manually." : "\(wordCount) words")
-                }
-            }
-            .navigationTitle("Article")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave(title, articleBody)
-                    }
-                    .disabled(!canSave)
-                }
-            }
-        }
-    }
 }
