@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rsvpnano.app.NanoDeviceSyncService
 import com.rsvpnano.app.RsvpSharedApp
+import com.rsvpnano.app.SharedAppUtils
 import com.rsvpnano.converters.ImportPreparation
 import com.rsvpnano.converters.RsvpConverter
 import com.rsvpnano.models.NanoBook
@@ -12,7 +13,6 @@ import com.rsvpnano.models.NanoSettings
 import com.rsvpnano.models.NanoWifiSettings
 import com.rsvpnano.models.PendingUpload
 import java.net.URI
-import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,7 +68,7 @@ class CompanionViewModel(
     }
 
     fun connectDefault() {
-        updateState { it.copy(address = DEFAULT_DEVICE_ADDRESS) }
+        updateState { it.copy(address = SharedAppUtils.DEFAULT_DEVICE_ADDRESS) }
         connect()
     }
 
@@ -119,16 +119,16 @@ class CompanionViewModel(
                 setStatus("Connecting...")
             }
             val state = current
-            val address = normalizedAddress(state.address)
+            val address = SharedAppUtils.normalizedAddress(state.address)
             runCatching { refreshConnection(address, state.rssFeeds) }
                 .onFailure { error ->
                     markDisconnected(
-                        if (address == DEFAULT_DEVICE_ADDRESS) {
-                            "Could not find RSVP Nano at $DEFAULT_DEVICE_ADDRESS. Check the Nano Wi-Fi, or enter the address shown on the reader."
+                        if (address == SharedAppUtils.DEFAULT_DEVICE_ADDRESS) {
+                            "Could not find RSVP Nano at ${SharedAppUtils.DEFAULT_DEVICE_ADDRESS}. Check the Nano Wi-Fi, or enter the address shown on the reader."
                         } else {
                             error.message ?: "Connection failed."
                         },
-                        showAddressEntry = current.showAddressEntry || address == DEFAULT_DEVICE_ADDRESS,
+                        showAddressEntry = current.showAddressEntry || address == SharedAppUtils.DEFAULT_DEVICE_ADDRESS,
                     )
                 }
         }
@@ -265,7 +265,7 @@ class CompanionViewModel(
                     title = title,
                     source = state.draftSourceUrl,
                     text = body,
-                    createdAt = existing?.createdAt ?: Instant.now().toString(),
+                    createdAt = existing?.createdAt ?: SharedAppUtils.nowIso8601(),
                     fallbackTitle = "Untitled",
                 )
             )
@@ -291,8 +291,8 @@ class CompanionViewModel(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
                     source = sourceUrl,
-                    host = "",
-                    createdAt = existing?.createdAt ?: Instant.now().toString(),
+                    host = hostName(sourceUrl),
+                    createdAt = existing?.createdAt ?: SharedAppUtils.nowIso8601(),
                 )
             )
             clearDraftEditor(
@@ -308,7 +308,15 @@ class CompanionViewModel(
 
     fun saveSharedImports(imports: List<SharedImport>) {
         viewModelScope.launch {
-            val prepared = imports.mapNotNull { it.toPendingUpload() }
+            val prepared = imports.mapNotNull {
+                ImportPreparation.prepareSharedImport(
+                    id = UUID.randomUUID().toString(),
+                    title = it.title,
+                    text = it.text,
+                    source = it.source,
+                    createdAt = SharedAppUtils.nowIso8601(),
+                )
+            }
             if (prepared.isEmpty()) {
                 setStatus("Shared item is not readable text or a URL.")
                 return@launch
@@ -486,45 +494,6 @@ class CompanionViewModel(
         }
     }
 
-    private fun SharedImport.toPendingUpload(): PendingUpload? {
-        val body = text.trim()
-        if (body.isEmpty()) {
-            return null
-        }
-        val cleanedSource = source.trim()
-        return if (body.isHttpUrl() && cleanedSource.ifEmpty { body }.isHttpUrl()) {
-            val url = cleanedSource.ifEmpty { body }
-            ImportPreparation.pendingUploadForUrl(
-                id = UUID.randomUUID().toString(),
-                title = title,
-                source = url,
-                host = url.hostName(),
-                createdAt = Instant.now().toString(),
-            )
-        } else {
-            ImportPreparation.pendingUploadForText(
-                id = UUID.randomUUID().toString(),
-                title = title,
-                source = cleanedSource,
-                text = body,
-                createdAt = Instant.now().toString(),
-                fallbackTitle = "Shared Text",
-            )
-        }
-    }
-
-    private fun String.isHttpUrl(): Boolean {
-        val value = trim()
-        return value.startsWith("http://") || value.startsWith("https://")
-    }
-
-    private fun String.hostName(): String {
-        return runCatching { URI(this).host.orEmpty() }.getOrDefault("")
-    }
-
-    private val current: CompanionUiState
-        get() = _uiState.value
-
     private fun setStatus(status: String) = updateState { it.copy(status = status) }
 
     private suspend fun refreshConnection(address: String, localRssFeeds: List<String>) {
@@ -545,7 +514,7 @@ class CompanionViewModel(
                 drafts = snapshot.drafts,
                 isConnected = device.info != null,
                 showAddressEntry = false,
-                status = "Connected to $deviceName. Loaded ${device.books.size} books.",
+                status = "Connected to $deviceName. ${device.summaryText}",
             )
         }
     }
@@ -568,18 +537,6 @@ class CompanionViewModel(
 
     private fun updateState(transform: (CompanionUiState) -> CompanionUiState) {
         _uiState.update(transform)
-    }
-
-    private fun normalizedAddress(value: String): String {
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            return DEFAULT_DEVICE_ADDRESS
-        }
-        return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            trimmed
-        } else {
-            "http://$trimmed"
-        }
     }
 
     class Factory(
