@@ -1,196 +1,208 @@
-## Plan: Kotlin Multiplatform Migration for RSVPNanoCompanion
+# RSVPNanoCompanion Migration Plan
 
-TL;DR - Move reusable business logic (parsers, converters, models, sync, API client) into a Kotlin Multiplatform `shared` module and keep platform UI native (SwiftUI on iOS, Compose on Android). Keep the iOS Share Extension in Swift but call into the shared module for parsing/formatting. Use Ktor, kotlinx.serialization, coroutines, and expect/actual for platform-specific storage.
-**Minimize Duplication (Principles & Actions)**
-- **Single Source of Truth:** Move all parsing, conversion, binary serialization, and API DTOs into `commonMain` so platform UIs call the same shared code.
-- **Clear Abstractions:** Define small interfaces in `commonMain` (e.g., `PendingUploadStore`, `FileProvider`, `HttpClient`) and implement platform specifics in `iosMain`/`androidMain` via `expect/actual` to avoid duplicated logic.
-- **Thin UI Adapters:** Keep a thin adapter layer (`NanoViewModel` in Swift, `ViewModel` in Android) that maps shared domain models to UI state; adapters contain only mapping/presentation logic, not business rules.
-- **Shared Utilities:** Centralize utilities (encoding detection, regex patterns, HTML cleanup rules) in `commonMain` and reuse them across converters to prevent divergent behaviors.
-- **Reuse Tests:** Implement shared `commonTest` unit tests for converters and writers and run them on both platforms to detect regressions and ensure parity.
-- **Binary Parity Gate:** Create byte-for-byte comparison tests for RSVP output; CI must run these to prevent accidental divergence.
-- **Documentation-Driven Contract:** Document public shared APIs and data formats; use these docs to keep platform adapters minimal and avoid re-implementations.
-- **Gradual Migration:** Port library code first and remove Swift business-logic fallbacks once Kotlin implementations pass parity tests; this avoids duplicating production code during transition.
+## Objective
 
+Move the companion apps to a shared Kotlin Multiplatform core while keeping native platform UI:
 
+- Shared Kotlin owns models, parsing, RSVP conversion, API access, persistence contracts, article/RSS workflows, and device orchestration.
+- iOS stays SwiftUI, including a Swift share extension, but calls shared Kotlin for business logic.
+- Android stays Jetpack Compose and calls the same shared Kotlin workflows.
+- Platform code should be thin presentation/adaptation code, not a second implementation of business rules.
 
-**Steps**
-1. Create KMP module: `shared` (Gradle Kotlin Multiplatform). Define `commonMain`, `iosMain`, `androidMain`.
-2. Implement models in `commonMain` with `kotlinx.serialization` (map from `Models.swift` to `RSVPNanoCompanion/shared/src/commonMain/.../NanoModels.kt`).
-3. Port text & EPUB logic to `commonMain`:
-   - `RsvpConverter.kt` and `RsvpWriter.kt` now own RSVP conversion/writing in shared (exact binary parity tests required).
-   - `EpubConverter.kt` now owns EPUB conversion through platform ZIP adapters.
-   - `ArticleFormatter.kt` now owns readable article formatting in shared.
-4. Implement `NanoClient` in `commonMain` using Ktor.
-5. Define persistence interfaces in `commonMain` (`PendingUploadStore`, `RssFeedStore`) and provide `expect/actual` implementations:
-   - `iosMain` uses FileManager + App Group and UserDefaults.
-   - `androidMain` uses `Context` + SharedPreferences / Room.
-6. Implement `SyncManager` in `commonMain` replicating logic from `NanoViewModel` (RSS merge, pending uploads orchestration). Keep UI state management on platform side. Expose suspend APIs for platform callers.
-7. Integrate with iOS:
-   - Build KMP iOS framework (XCFramework) and add to Xcode project.
-   - Replace calls in `ContentView.swift`/`NanoViewModel` to call shared `SyncManager`/`NanoClient` via Swift coroutines bridge (use `@objc`/Kotlin/Native generated interop). Keep Swift-only models thin and keep persistence in shared.
-   - Keep Share extension Swift-only but call shared converters for formatting.
-8. Implement Android app shell (Compose) that mirrors SwiftUI flows and calls `shared` APIs.
-   - Current Android shell uses shared storage, shared Ktor device sync, device book upload/listing/deletion, saved article create/edit/delete, ready text article sync, URL-only article fetching, and RSS add/sync.
-   - Android share-sheet support now accepts `ACTION_SEND` / `ACTION_SEND_MULTIPLE` text payloads, URLs, and text-file streams, then saves them through shared `ImportPreparation` and shared draft storage before sync.
-   - Remaining Android gap: manual device smoke testing on hardware/emulator and UI polish.
-9. Testing and parity verification:
-   - Add `commonTest` unit tests for converters and models.
-   - Create byte-for-byte tests comparing RSVP output from Swift implementation vs Kotlin implementation using sample inputs from `docs/demo-books`.
-   - Current parity gate: `RsvpDemoBookParityAndroidTest` verifies `docs/demo-books/european-letter-demo.rsvp` passes through byte-for-byte on Android/JVM tests.
-   - Mocked API smoke tests cover shared Ktor endpoint paths, query parameters, upload/delete contract, and response decoding.
-   - Mocked article fetch tests cover shared URL validation, fetch size guards, and HTML-to-readable-article formatting.
-10. Documentation & CI:
-  - Document build steps, Xcode integration, and Android Gradle setup in `RSVPNanoCompanion/ios/README.md` and `RSVPNanoCompanion/android/README.md`.
-   - Add CI jobs to build `shared` for Android and iOS and run `commonTest`.
-11. UI/UX design and styling for both iOS and Android:
-  - Define a shared product-level design direction for navigation, information hierarchy, states, and interaction patterns while keeping SwiftUI and Compose implementations native.
-  - Style both apps beyond the current shell: typography, spacing, color system, component states, empty/loading/error views, device connection flow, library management, saved article workflows, RSS management, and settings screens.
-  - Polish platform-specific ergonomics for phone-sized layouts, accessibility, visual consistency, and final user-facing fit and finish before considering the apps complete.
+## Current Status
 
-**Current Status and Remaining Work**
-- Shared is now the source of truth for the main business logic: models, converters, Ktor API client, persistence interfaces, RSS/draft/device workflow services, and the app-level controller are in `shared`.
-- The old shared facade pattern has been removed; platform adapters call the focused shared services/controller directly.
-- Android uses shared storage, shared device sync, upload/list/delete, settings, Wi-Fi, RSS, and saved-article workflows.
-- Android now has a platform share target equivalent to the iOS share extension for incoming text, URLs, and text-file streams, saving them as local drafts/articles without opening the manual editor first.
-- iOS uses shared converters/controller/wiring for app and share-extension flows, while keeping SwiftUI UI and Swift presentation models.
-- Device connection state is guarded through shared reachability checks before device mutations, so stale UI should clear when the Nano disconnects.
-- Highest remaining product gaps are iOS CI/macOS verification, manual device smoke testing on Android and iOS, broader converter parity vectors, and UI/UX styling.
+- [x] `shared` Kotlin Multiplatform module exists with Android and iOS targets.
+- [x] Shared models are the source of truth for device/book/settings/draft/RSS data.
+- [x] Shared Ktor API client handles RSVP Nano HTTP calls.
+- [x] Shared RSVP text/file conversion owns the main conversion path.
+- [x] Shared EPUB conversion exists through platform ZIP adapters.
+- [x] Shared article formatting/fetching exists.
+- [x] Shared pending-upload persistence exists with platform implementations.
+- [x] Shared RSS feed persistence exists.
+- [x] Shared `NanoCompanionController` owns app-level workflows.
+- [x] Old shared facade pattern has been removed.
+- [x] Android app shell uses shared storage, device sync, upload/list/delete, settings, Wi-Fi, RSS, and saved-article workflows.
+- [x] Android share target accepts shared text, URLs, and text-file streams into shared draft storage.
+- [x] iOS app uses shared converters/controller/wiring for app workflows.
+- [x] iOS share extension calls shared logic for saved article/share flows.
+- [x] iOS `ContentView` has been split into focused page/view files for library, articles, settings, help, and article editing.
+- [x] Device mutations verify reachability before writes, so stale connected UI should clear when the Nano disconnects.
+- [x] Android CI and iOS CI exist and build the relevant shared/app targets.
+- [x] Local Windows verification covers shared Android compilation, shared tests/lint, and Android debug APK assembly.
 
-**Refactor Backlog**
-1. Remove stale Swift converter target references and any unused Swift converter files once shared converter usage is confirmed by iOS CI. Target references are removed; physical files are already absent from the iOS source folder.
-2. Split `ContentView.swift` into focused SwiftUI views: library, articles, settings, help, and article editor are split; connection currently lives with the library entry flow.
-3. Split `NanoViewModel.swift` by responsibility if Swift-side orchestration remains: connection/device state, settings/RSS, drafts/articles, and Swift/Kotlin conversion helpers.
-4. Keep shrinking platform ViewModels so they map shared snapshots to UI state only; business rules should stay in shared services/controllers.
-5. Update stale plan/documentation references that still describe already-completed ports as future work.
-6. Add EPUB-to-RSVP golden vectors and more article/converter fixtures to make the shared implementation safer to evolve.
-7. After CI proves the shared replacements, delete any remaining Swift business-logic files that are no longer compiled or needed.
+## Priority 0: Keep The Build Green
 
-**Relevant files**
-- [RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift) — main UI + `NanoViewModel` to adapt to shared `SyncManager`.
-- [RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift) — source of DTOs to port.
-- [RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/PendingUploadStore.swift) — thin Swift UI model/app-group constants; storage is owned by `shared`.
-- [RSVPNanoCompanion/ios/RSVPNanoShareExtension/ShareViewController.swift](RSVPNanoCompanion/ios/RSVPNanoShareExtension/ShareViewController.swift) — keep Swift, call into `shared` converters.
+These are blocking tasks. Do them before feature work when they fail.
 
-**Verification**
-1. Unit tests in `RSVPNanoCompanion/shared/commonTest` for `RsvpConverter`, `EpubConverter`, and `ArticleFormatter`, with golden vectors for output stability.
-2. Binary parity: Android/JVM unit tests currently verify byte-for-byte pass-through for `RSVPNanoCompanion/docs/demo-books/european-letter-demo.rsvp`; add EPUB-to-RSVP golden vectors as sample EPUBs become available.
-3. Manual app smoke test on iOS: integrate `shared` framework, run app, upload book to device using existing pairing flow.
-4. Android smoke test: simple Compose screens call `shared` SyncManager to list `NanoBook` DTOs (mocked API), and create an RSVP from sample EPUB.
-5. CI: ensure Gradle builds for `android`, Kotlin `commonTest` passes, and `ios` XCFramework builds.
+- [ ] Keep Android CI passing.
+- [ ] Keep iOS CI passing.
+- [ ] Fix Kotlin/Native compatibility issues immediately when iOS CI reports them.
+- [ ] Keep GitHub Actions current enough to avoid Node runtime deprecation failures.
+- [ ] Keep Gradle wrapper executable in CI.
+- [ ] Keep generated iOS XCFramework artifact upload paths accurate.
+- [ ] Keep local Android verification passing:
 
-**Decisions & Assumptions**
+```powershell
+powershell -ExecutionPolicy Bypass -File .local\run_local_gradle.ps1 :shared:check :androidApp:assembleDebug --no-daemon --no-configuration-cache
+```
 
+## Priority 1: Functional Completion
 
-**Scaffold: `shared` module (detailed)**
+These decide whether the apps are actually usable end-to-end.
 
-TL;DR: Create a small, maintainable KMP `shared` module that contains models, converters, API client interfaces, and persistence interfaces. Keep platform specifics out of `commonMain` by using small interfaces + dependency injection.
+- [ ] Manually smoke test iOS app against real RSVP Nano hardware.
+- [ ] Manually smoke test Android app against real RSVP Nano hardware.
+- [ ] Verify the primary connection UX on both platforms:
+  - [x] Primary route tells the user to open Companion Sync on the reader and join the RSVP-Nano Wi-Fi.
+  - [x] App checks `http://192.168.4.1` automatically when returning/connecting.
+  - [x] If default address fails, user can enter the IP/address shown on the reader.
+  - [ ] Confirm disconnected/powered-off reader updates UI promptly on both platforms.
+- [ ] Verify core device operations on both platforms:
+  - [x] List books/articles from the reader.
+  - [x] Upload converted books.
+  - [x] Delete books/articles from the reader.
+  - [x] Read reader settings.
+  - [x] Save reader settings.
+  - [x] Read Wi-Fi settings.
+  - [x] Save Wi-Fi settings.
+  - [x] Clear Wi-Fi settings.
+  - [x] Add RSS feeds locally.
+  - [x] Sync RSS feeds to the reader.
+  - [x] Save text/article drafts locally.
+  - [x] Fetch URL-only article drafts.
+  - [x] Sync saved articles to the reader.
+  - [ ] Confirm all operations behave correctly after the Nano disconnects mid-session.
+- [ ] Verify platform share flows:
+  - [x] iOS share extension saves incoming URLs/text into shared draft storage.
+  - [x] Android share target saves incoming URLs/text/text-file streams into shared draft storage.
+  - [ ] Manually test iOS sharing from Safari/Chrome/reader apps.
+  - [ ] Manually test Android sharing from Chrome/reader/file apps.
+  - [ ] Decide whether binary file sharing should create a local pending book workflow, direct upload only, or remain unsupported.
 
-Files & Layout (create under `RSVPNanoCompanion/shared/`)
-- `RSVPNanoCompanion/shared/build.gradle.kts` — KMP build file with Android + iOS targets and `kotlinx.serialization`, `ktor-client`, and `coroutines` dependencies.
-- `RSVPNanoCompanion/shared/settings.gradle.kts` — includeProject config if needed.
-- `RSVPNanoCompanion/shared/src/commonMain/kotlin/com/rsvpnano/`:
-  - `models/NanoModels.kt` — `@Serializable` DTOs (example: `NanoBook`).
-  - `persistence/PendingUploadStore.kt` — interface for persistence (suspend functions); implementations provided by platform.
-  - `api/NanoClient.kt` — interface for API operations (suspend functions); implementation in common using Ktor or provided by DI.
-  - `converters/RsvpConverter.kt` — placeholder for shared converter logic (later port).
-- `RSVPNanoCompanion/shared/src/commonTest/kotlin/...` — test templates for parity/unit tests.
-- `RSVPNanoCompanion/shared/src/iosMain/kotlin/...` — thin adapter that binds `FileManager`/AppGroup to `PendingUploadStore` and provides iOS-specific wiring.
-- `RSVPNanoCompanion/shared/src/androidMain/kotlin/...` — `Context`-based implementation for `PendingUploadStore`.
+## Priority 2: Shared-Core Hardening
 
-Minimal `build.gradle.kts` snippet (conceptual)
-- Apply plugins: `kotlin("multiplatform")`, `kotlin("plugin.serialization")`
-- Targets: `android()`, `ios { binaries.framework { baseName = "shared" } }`
-- Dependencies (commonMain): `implementation("io.ktor:ktor-client-core:2.x")`, `implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.x")`, `implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0")`
+These reduce the chance of app divergence and regression.
 
-Example DTO (`NanoBook`) for `commonMain` (concept)
-- `@Serializable data class NanoBook(val id: String, val title: String? = null, val author: String? = null, val bytes: Int = 0, val progressPercent: Int? = null, val category: String? = null)`
+- [x] Shared `NanoCompanionController` centralizes repeated connect/refresh/sync/delete/settings/RSS flows.
+- [x] Shared `ImportPreparation` centralizes text/link draft normalization.
+- [x] Shared settings update helpers keep settings immutable while remaining usable from Swift.
+- [x] Shared `NanoBook.id` is used consistently across iOS and Android.
+- [ ] Move any remaining platform-side business decisions into shared services where practical.
+- [ ] Review Android `CompanionViewModel` for logic that belongs in shared controller/service methods.
+- [ ] Review iOS `NanoViewModel` for logic that belongs in shared controller/service methods.
+- [ ] Split `NanoViewModel.swift` further if Swift-side orchestration remains large:
+  - [ ] Connection/device state.
+  - [ ] Settings/Wi-Fi/RSS.
+  - [ ] Drafts/articles/share inbox.
+  - [ ] Swift/Kotlin conversion helpers.
+- [ ] Keep Swift `Models.swift` as presentation extensions/adapters only.
+- [ ] Delete any remaining Swift business-logic files that are not compiled or no longer needed after iOS CI proves shared replacements.
 
-Persistence Interface (common)
-- `interface PendingUploadStore { suspend fun loadAll(): List<PendingUpload>; suspend fun saveAll(items: List<PendingUpload>) }
-- Implementations: `IosPendingUploadStore` in `iosMain` (use FileManager + App Group), `AndroidPendingUploadStore` in `androidMain` (Context + files or SharedPreferences). Inject store into `SyncManager` at startup.
+## Priority 3: Test Coverage And Parity
 
-Why interface+DI (recommended): keeps `commonMain` platform-agnostic, avoids `expect/actual` boilerplate, and is simpler to test and maintain.
+The goal is confidence that Kotlin output matches the legacy behavior and remains stable.
 
-Example test template (commonTest)
-- `RsvpParityTest` — load `RSVPNanoCompanion/docs/demo-books/sample.epub`, run `RsvpConverter.createRsvp(...)`, compute SHA256 and assert equals expected checksum stored in `test/resources`.
+- [x] Shared mocked API tests cover endpoint paths, query parameters, upload/delete contract, and response decoding.
+- [x] Shared article fetch tests cover URL validation, fetch size guards, and HTML-to-readable formatting.
+- [x] Android/JVM parity test verifies existing `.rsvp` demo pass-through byte-for-byte.
+- [ ] Add EPUB-to-RSVP golden vectors.
+- [ ] Add text-to-RSVP golden vectors.
+- [ ] Add HTML/article formatting fixtures for common web pages.
+- [ ] Add tests for shared settings update helpers.
+- [ ] Add tests for shared import preparation edge cases:
+  - [ ] Empty titles.
+  - [ ] URL title/host cleanup.
+  - [ ] Text title inference.
+  - [ ] Source URL handling.
+- [ ] Add tests for pending upload sync behavior after partial failures.
+- [ ] Add tests for RSS merge/de-duplication behavior.
+- [ ] Store parity fixtures in a deterministic repo path, preferably under `shared/src/commonTest/resources` or `docs/test-vectors`.
+- [ ] Have CI upload parity diffs/artifacts when tests fail.
 
-Verification for scaffold
-1. `./gradlew :shared:assemble` builds the module for Android and produces an XCFramework for iOS (or use Gradle tasks to produce frameworks). 2. Add `shared` as a dependency to Android app module. 3. Integrate built framework into Xcode project and compile.
+## Priority 4: Platform UX And Polish
 
-Next actionable option (pick one)
-- Implement the `shared` Gradle scaffold and add `NanoBook` + `PendingUploadStore` interface and a tiny unit test template (I will generate files).  
-- OR generate `commonTest` parity test vectors and harness only (no build files).
+This is the product-quality phase after core workflows are stable.
 
-Recommendation: implement the scaffold first (Gradle + one DTO + interface + test template). This gives a minimal working KMP artifact to iterate on and avoids duplicated platform-specific code.
+- [ ] Define a shared product-level design direction:
+  - [ ] Navigation model.
+  - [ ] Information hierarchy.
+  - [ ] Connection states.
+  - [ ] Empty/loading/error states.
+  - [ ] Device operation confirmations.
+  - [ ] Saved article workflow.
+  - [ ] RSS workflow.
+  - [ ] Settings workflow.
+- [ ] Redesign iOS SwiftUI screens with native polish.
+- [ ] Redesign Android Compose screens with native polish.
+- [ ] Improve connection UX copy for casual users who only see the Nano's AP name and `http://192.168.4.1`.
+- [ ] Add clear offline/disconnected states that prevent destructive actions.
+- [ ] Add automatic connection testing after returning from Wi-Fi settings.
+- [ ] Add better success/failure messaging for Wi-Fi save/clear and settings save.
+- [ ] Add accessibility pass:
+  - [ ] Dynamic type/text scaling.
+  - [ ] VoiceOver/TalkBack labels.
+  - [ ] Touch target sizes.
+  - [ ] Color contrast.
+- [ ] Add phone-sized layout pass on both platforms.
 
-- Share extension remains Swift-only; only parsing/formatting logic is migrated.
-- Binary RSVP format must be byte-identical; tests will gate merging.
-- No closed-source dependencies were found; assume pure-Swift codebase.
-- Use Ktor + kotlinx.serialization + coroutines as primary KMP stack.
+## Priority 5: Local Developer Experience
 
-**Further Considerations**
-1. Do you want the iOS UI to call the shared `SyncManager` directly from Swift, or keep a thin `NanoViewModel` adapter on the Swift side that calls `shared` (recommended: keep adapter for minimal UI changes)?
-2. Would you prefer `SQLDelight` for multi-platform persistence (more structure) or simple `expect/actual` file + SharedPreferences adapters (faster)?
-3. Would you like CI to publish the built iOS XCFramework as an artifact for easier Xcode integration?
+Local tooling is intentionally developer-specific and should stay in `.local`, not project-level tools intended for maintainers.
 
+- [x] Local Java/Gradle/Android SDK setup exists under `.local`.
+- [x] `.local` README documents local setup.
+- [x] Local Android debug APK install script exists.
+- [x] Local Android emulator/device testing path exists.
+- [x] Local bridge script was removed because connecting to the Nano AP directly works.
+- [ ] Keep `.local` files out of shared maintainer workflows unless intentionally documented.
+- [ ] Document common Android device testing commands:
+  - [ ] USB install.
+  - [ ] Wireless debugging pair/connect/install.
+  - [ ] Launch app after install.
+- [ ] Document that iOS verification is expected through CI/macOS, not Docker.
 
+## Priority 6: Documentation And Release Readiness
 
-**CI/CD (Detailed)**
+- [ ] Update iOS README with current shared framework integration and CI expectations.
+- [ ] Update Android README with build/install/share-target/testing instructions.
+- [ ] Document supported import/share types:
+  - [ ] Text.
+  - [ ] URLs.
+  - [ ] Text files.
+  - [ ] EPUB/books, once the intended UX is decided.
+- [ ] Document RSVP Nano connection limitations:
+  - [ ] Firmware currently exposes AP details and `http://192.168.4.1`.
+  - [ ] App cannot change firmware UI.
+  - [ ] Primary UX assumes user joins the Nano AP when needed.
+- [ ] Document CI artifacts:
+  - [ ] Android APK/AAR outputs.
+  - [ ] iOS XCFramework output.
+- [ ] Add release checklist:
+  - [ ] Android debug/release build.
+  - [ ] iOS app build.
+  - [ ] iOS share extension build.
+  - [ ] Hardware smoke test.
+  - [ ] Share-flow smoke test.
+  - [ ] Basic accessibility pass.
 
-Objective: Ensure builds, tests, and parity checks run automatically on PRs; build artifacts (XCFramework, AAR) are produced and optionally published. Gate merges on unit + parity tests.
+## Deferred Or Explicitly Not Planned Yet
 
-Workflows (GitHub Actions recommended):
-- `ci-android.yml` (runs on `ubuntu-latest`):
-  - Checkout, cache Gradle, run `./gradlew :shared:assemble` and `./gradlew :shared:check`.
-  - Upload artifacts: `shared/build/outputs` (AAR/jars) if needed.
-  - Steps:
-    1. Setup JDK (E.g., `temurin` 17 or 21).
-    2. Cache Gradle and `.gradle` dependencies.
-    3. Run `./gradlew :shared:assemble :shared:connectedCheck` (if Android emulator tests added later).
-    4. Run `./gradlew :shared:check --no-daemon` to run `commonTest`.
-  - Use matrix if testing multiple Kotlin versions or Ktor variants.
+- [ ] LAN discovery for the Nano on home Wi-Fi is deferred. Without firmware support such as mDNS, stable hostnames, or an advertised API endpoint, scanning is likely unreliable and confusing.
+- [ ] Docker for iOS is not useful for real local iOS app testing because Xcode/macOS is still required.
+- [ ] Firmware changes are out of scope because we do not currently have permission to modify the Nano firmware.
+- [ ] Binary file sharing into local pending drafts is not implemented because the current pending-upload model stores article text, not prebuilt `.rsvp` book bytes.
 
-- `ci-ios.yml` (runs on `macos-latest`):
-  - Checkout, install CocoaPods if needed, setup JDK, run `./gradlew :shared:assemble` to build XCFramework, run `xcodebuild` to build the iOS app target (optional smoke test).
-  - Run parity tests that require macOS (byte-for-byte RSVP parity):
-    1. Run Kotlin `commonTest` on macOS via Gradle.
-    2. Run Swift parity generator (a small Swift script or existing Swift command) to produce expected RSVP outputs OR run Kotlin converter and compare to stored golden files. The goal: run a parity harness that compares expected vs produced outputs.
-  - Upload artifacts: `shared/build/libs` and the generated `.xcframework` as workflow artifacts.
-  - Use macOS runners to sign and, optionally, publish the XCFramework to GitHub Packages or internal artifact storage.
+## Definition Of Done
 
-- `ci-parity.yml` (optional, runs on `macos-latest` and triggered on schedule or PR):
-  - Specific job to run byte-for-byte tests across a set of sample books under `docs/demo-books`.
-  - Fail the job if any checksum differs.
+The migration should be considered complete only when:
 
-Quality Gates and Policies:
-- Require `ci-android` and `ci-ios` to pass before merging to `main`.
-- Enforce branch protection rules: require passing checks, require PR reviews.
-- Publish test artifacts and parity reports as job artifacts for debugging failing tests.
-
-Artifacts & Releases:
-- Build and upload `shared.xcframework` and `shared.aar` (or AAR/artifact) to GitHub Actions artifacts on successful main builds.
-- Optionally publish the `shared` artifact to GitHub Packages (Maven repo) for Android consumption; use secrets for credentials.
-- Optionally publish XCFramework to an internal binary repository or attach to GitHub Releases.
-
-Monitoring and Notifications:
-- Fail PRs loudly; post comments with failing test names and links to artifacts.
-- Store parity test failure diffs as artifacts to speed debugging.
-
-Implementation notes:
-- Parity tests require deterministic inputs; store sample inputs and expected checksums in `RSVPNanoCompanion/shared/src/commonTest/resources` or a new `ci/test-vectors/` folder.
-- Keep CI jobs minimal at first: build + commonTest on Ubuntu, build + parity on macOS. Expand later to run Android UI tests or iOS UI tests if needed.
-- Cache Gradle and Ktor/Kotlin dependencies to speed repeated CI runs.
-
-Security & Secrets:
-- Use GitHub Secrets for publishing credentials and code-signing keys.
-- Limit macOS runner usage via conditional jobs when possible; run parity tests on pull requests but schedule heavy parity checks nightly for large vectors.
-
-CI Checklist (first iteration):
-1. `ci-android.yml` builds Gradle `:shared` and runs `commonTest`.
-2. `ci-ios.yml` builds `:shared` XCFramework and runs parity checks on a small sample.
-3. Configure branch protection to require both checks.
-4. Add artifact upload steps and store expected checksums in repo.
-
-
-
-- Current constraint: iOS framework verification requires macOS/Xcode; local Windows verification covers shared Android compilation, shared unit tests, lint, and Android debug APK assembly.
+- [ ] Android CI passes.
+- [ ] iOS CI passes.
+- [ ] Shared parity tests cover representative text, HTML, EPUB, and existing `.rsvp` paths.
+- [ ] iOS app builds and runs against real hardware.
+- [ ] Android app builds and runs against real hardware.
+- [ ] Both apps can connect, refresh, upload, delete, sync articles, sync RSS, and update settings.
+- [ ] Both share flows save drafts correctly.
+- [ ] Disconnect/power-off behavior prevents stale destructive actions.
+- [ ] Remaining platform code is UI/presentation/adaptation only.
+- [ ] User-facing UX is polished enough for non-technical users.
