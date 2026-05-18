@@ -45,6 +45,7 @@ class NanoCompanionController(
     }
 
     suspend fun refreshDevice(baseUrl: String, localRssFeeds: List<String>): CompanionDeviceRefreshSnapshot {
+        verifyReachable(baseUrl)
         val books = deviceSyncService.refreshBooks(baseUrl)
         val settings = runCatching { deviceSyncService.refreshSettings(baseUrl) }.getOrNull()
         val wifiSettings = runCatching { deviceSyncService.refreshWifiSettings(baseUrl) }.getOrNull()
@@ -61,6 +62,7 @@ class NanoCompanionController(
     }
 
     suspend fun syncPendingUploads(baseUrl: String, items: List<PendingUpload>): CompanionPendingSyncSnapshot {
+        verifyReachable(baseUrl)
         val remaining = draftService.syncPendingUploads(client = client, baseUrl = baseUrl, items = items)
         return CompanionPendingSyncSnapshot(
             drafts = remaining,
@@ -122,6 +124,7 @@ class NanoCompanionController(
             )
         }
 
+        verifyReachable(baseUrl)
         val deviceFeeds = deviceSyncService.saveRssFeeds(baseUrl, normalized).feeds
         val syncedFeeds = rssFeedService.mergeRssFeeds(localFeeds = emptyList(), deviceFeeds = deviceFeeds)
         val mergedFeeds = saveMergedRssFeeds(normalized, syncedFeeds)
@@ -133,6 +136,7 @@ class NanoCompanionController(
     }
 
     suspend fun refreshRssFeeds(baseUrl: String, localRssFeeds: List<String>): CompanionRssSnapshot {
+        verifyReachable(baseUrl)
         val deviceFeeds = deviceSyncService.refreshRssFeeds(baseUrl).feeds
         val syncedFeeds = rssFeedService.mergeRssFeeds(localFeeds = emptyList(), deviceFeeds = deviceFeeds)
         val mergedFeeds = saveMergedRssFeeds(localRssFeeds, syncedFeeds)
@@ -144,6 +148,7 @@ class NanoCompanionController(
     }
 
     suspend fun uploadBook(baseUrl: String, file: RsvpBookFile, category: String): CompanionBooksSnapshot {
+        verifyReachable(baseUrl)
         deviceSyncService.uploadBook(
             baseUrl = baseUrl,
             filename = file.filename,
@@ -154,6 +159,7 @@ class NanoCompanionController(
     }
 
     suspend fun deleteBooks(baseUrl: String, bookIds: List<String>): CompanionBooksSnapshot {
+        verifyReachable(baseUrl)
         bookIds.forEach { bookId ->
             deviceSyncService.deleteBook(baseUrl, bookId)
         }
@@ -161,6 +167,7 @@ class NanoCompanionController(
     }
 
     suspend fun refreshSettings(baseUrl: String): CompanionSettingsSnapshot {
+        verifyReachable(baseUrl)
         return CompanionSettingsSnapshot(
             settings = deviceSyncService.refreshSettings(baseUrl),
             wifiSettings = runCatching { deviceSyncService.refreshWifiSettings(baseUrl) }.getOrNull(),
@@ -168,6 +175,7 @@ class NanoCompanionController(
     }
 
     suspend fun saveSettings(baseUrl: String, settings: NanoSettings): CompanionSettingsSnapshot {
+        verifyReachable(baseUrl)
         return CompanionSettingsSnapshot(
             settings = deviceSyncService.saveSettings(baseUrl, settings),
             wifiSettings = null,
@@ -175,17 +183,24 @@ class NanoCompanionController(
     }
 
     suspend fun refreshWifiSettings(baseUrl: String): CompanionWifiSnapshot {
+        verifyReachable(baseUrl)
         return CompanionWifiSnapshot(wifiSettings = deviceSyncService.refreshWifiSettings(baseUrl))
     }
 
     suspend fun saveWifiSettings(baseUrl: String, ssid: String, password: String): CompanionWifiSnapshot {
+        verifyReachable(baseUrl)
         return CompanionWifiSnapshot(
             wifiSettings = deviceSyncService.saveWifiSettings(baseUrl, ssid, password),
         )
     }
 
     suspend fun clearWifiSettings(baseUrl: String): CompanionWifiSnapshot {
+        verifyReachable(baseUrl)
         return CompanionWifiSnapshot(wifiSettings = deviceSyncService.clearWifiSettings(baseUrl))
+    }
+
+    suspend fun verifyReachable(baseUrl: String) {
+        deviceSyncService.verifyReachable(baseUrl)
     }
 
     private suspend fun saveMergedRssFeeds(localFeeds: List<String>, deviceFeeds: List<String>): List<String> {

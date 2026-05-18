@@ -22,17 +22,22 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rsvpnano.app.RsvpSharedApp
 
 @Composable
 fun CompanionApp(sharedApp: RsvpSharedApp) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val viewModel: CompanionViewModel = viewModel(factory = CompanionViewModel.Factory(sharedApp))
     val uiState by viewModel.uiState.collectAsState()
     val filePicker = rememberLauncherForActivityResult(
@@ -43,6 +48,15 @@ fun CompanionApp(sharedApp: RsvpSharedApp) {
                 viewModel.uploadSelectedFile(displayName = file.displayName, data = file.data)
             }
         }
+    }
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !viewModel.uiState.value.isConnected) {
+                viewModel.connect()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     MaterialTheme {
@@ -311,7 +325,7 @@ private fun ConnectionPanel(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(text = "Connect to RSVP Nano", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Open Companion Sync on the reader, join the RSVP-Nano Wi-Fi, then test the default address.",
+            text = "Open Companion Sync on the reader, then join the RSVP-Nano Wi-Fi. The app checks the reader automatically when you return.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -319,13 +333,13 @@ private fun ConnectionPanel(
                 Text(text = "Join Nano Wi-Fi")
             }
             Button(onClick = onConnectDefault) {
-                Text(text = "Test Connection")
+                Text(text = "Check Now")
             }
         }
 
         Text(text = "Fallback", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "If Android does not show the network picker, open Wi-Fi settings manually, join the network shown on the reader, then test again.",
+            text = "If Android does not show the network picker, open Wi-Fi settings manually, join the network shown on the reader, then return to the app.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

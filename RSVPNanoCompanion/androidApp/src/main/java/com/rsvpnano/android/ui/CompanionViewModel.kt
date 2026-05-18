@@ -92,48 +92,37 @@ class CompanionViewModel(
                     status = "Loaded ${local.drafts.size} drafts.",
                 )
             }
+            if (!current.isConnected) {
+                connectSilently()
+            }
         }
     }
 
     fun connect() {
+        connect(showBusyStatus = true)
+    }
+
+    private fun connectSilently() {
+        connect(showBusyStatus = false)
+    }
+
+    private fun connect(showBusyStatus: Boolean) {
         viewModelScope.launch {
-            setStatus("Connecting...")
+            if (showBusyStatus) {
+                setStatus("Connecting...")
+            }
             val state = current
             val address = normalizedAddress(state.address)
-            runCatching { companionController.connect(address, state.rssFeeds) }
-                .onSuccess { snapshot ->
-                    val device = snapshot.device
-                    val deviceName = device.info?.name ?: "RSVP Nano"
-                    updateState {
-                        it.copy(
-                            books = device.books,
-                            settings = device.settings,
-                            wifiSettings = device.wifiSettings,
-                            settingsWpmDraft = device.settings?.reading?.wpm?.toString().orEmpty(),
-                            settingsBrightnessDraft = device.settings?.display?.brightnessIndex?.toString().orEmpty(),
-                            wifiSsidDraft = device.wifiSettings?.ssid.orEmpty(),
-                            wifiPasswordDraft = "",
-                            address = address,
-                            rssFeeds = snapshot.rssFeeds,
-                            drafts = snapshot.drafts,
-                            isConnected = device.info != null,
-                            showAddressEntry = false,
-                            status = "Connected to $deviceName. Loaded ${device.books.size} books.",
-                        )
-                    }
-                }
+            runCatching { refreshConnection(address, state.rssFeeds) }
                 .onFailure { error ->
-                    updateState {
-                        it.copy(
-                            isConnected = false,
-                            showAddressEntry = it.showAddressEntry || address == DEFAULT_DEVICE_ADDRESS,
-                            status = if (address == DEFAULT_DEVICE_ADDRESS) {
-                                "Could not find RSVP Nano at $DEFAULT_DEVICE_ADDRESS. Check the Nano Wi-Fi, or enter the address shown on the reader."
-                            } else {
-                                error.message ?: "Connection failed."
-                            },
-                        )
-                    }
+                    markDisconnected(
+                        if (address == DEFAULT_DEVICE_ADDRESS) {
+                            "Could not find RSVP Nano at $DEFAULT_DEVICE_ADDRESS. Check the Nano Wi-Fi, or enter the address shown on the reader."
+                        } else {
+                            error.message ?: "Connection failed."
+                        },
+                        showAddressEntry = current.showAddressEntry || address == DEFAULT_DEVICE_ADDRESS,
+                    )
                 }
         }
     }
@@ -169,7 +158,7 @@ class CompanionViewModel(
                         )
                     }
                 }
-                .onFailure { error -> setStatus(error.message ?: "Settings save failed.") }
+                .onFailure { error -> markDisconnected(error.message ?: "Reader disconnected before saving settings.") }
         }
     }
 
@@ -198,7 +187,7 @@ class CompanionViewModel(
                         )
                     }
                 }
-                .onFailure { error -> setStatus(error.message ?: "Wi-Fi save failed.") }
+                .onFailure { error -> markDisconnected(error.message ?: "Reader disconnected before saving Wi-Fi.") }
         }
     }
 
@@ -222,7 +211,7 @@ class CompanionViewModel(
                         )
                     }
                 }
-                .onFailure { error -> setStatus(error.message ?: "Wi-Fi clear failed.") }
+                .onFailure { error -> markDisconnected(error.message ?: "Reader disconnected before clearing Wi-Fi.") }
         }
     }
 
@@ -354,7 +343,7 @@ class CompanionViewModel(
             }.onSuccess { rss ->
                 updateState { it.copy(rssFeeds = rss.rssFeeds, status = "RSS feeds synced to the reader.") }
             }.onFailure { error ->
-                setStatus(error.message ?: "RSS sync failed.")
+                markDisconnected(error.message ?: "Reader disconnected before syncing RSS feeds.")
             }
         }
     }
@@ -386,7 +375,7 @@ class CompanionViewModel(
                     )
                 }
             }.onFailure { error ->
-                setStatus(error.message ?: "Saved article sync failed.")
+                markDisconnected(error.message ?: "Reader disconnected before syncing saved articles.")
             }
         }
     }
@@ -404,9 +393,7 @@ class CompanionViewModel(
                 companionController.deleteBooks(state.address, listOf(book.id))
             }.onSuccess { snapshot ->
                 updateState { it.copy(books = snapshot.books, status = "Deleted $title.") }
-            }.onFailure { error ->
-                setStatus(error.message ?: "Book delete failed.")
-            }
+            }.onFailure { error -> markDisconnected(error.message ?: "Reader disconnected before deleting books.") }
         }
     }
 
@@ -427,9 +414,7 @@ class CompanionViewModel(
                 )
             }.onSuccess { snapshot ->
                 updateState { it.copy(books = snapshot.books, status = "Uploaded $displayName.") }
-            }.onFailure { error ->
-                setStatus(error.message ?: "File upload failed.")
-            }
+            }.onFailure { error -> markDisconnected(error.message ?: "Reader disconnected before uploading files.") }
         }
     }
 
@@ -473,6 +458,45 @@ class CompanionViewModel(
         get() = _uiState.value
 
     private fun setStatus(status: String) = updateState { it.copy(status = status) }
+
+    private suspend fun refreshConnection(address: String, localRssFeeds: List<String>) {
+        val snapshot = companionController.connect(address, localRssFeeds)
+        val device = snapshot.device
+        val deviceName = device.info?.name ?: "RSVP Nano"
+        updateState {
+            it.copy(
+                books = device.books,
+                settings = device.settings,
+                wifiSettings = device.wifiSettings,
+                settingsWpmDraft = device.settings?.reading?.wpm?.toString().orEmpty(),
+                settingsBrightnessDraft = device.settings?.display?.brightnessIndex?.toString().orEmpty(),
+                wifiSsidDraft = device.wifiSettings?.ssid.orEmpty(),
+                wifiPasswordDraft = "",
+                address = address,
+                rssFeeds = snapshot.rssFeeds,
+                drafts = snapshot.drafts,
+                isConnected = device.info != null,
+                showAddressEntry = false,
+                status = "Connected to $deviceName. Loaded ${device.books.size} books.",
+            )
+        }
+    }
+
+    private fun markDisconnected(
+        status: String,
+        showAddressEntry: Boolean = false,
+    ) {
+        updateState {
+            it.copy(
+                books = emptyList(),
+                settings = null,
+                wifiSettings = null,
+                isConnected = false,
+                showAddressEntry = showAddressEntry,
+                status = status,
+            )
+        }
+    }
 
     private fun updateState(transform: (CompanionUiState) -> CompanionUiState) {
         _uiState.update(transform)

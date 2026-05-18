@@ -28,6 +28,10 @@ class NanoDeviceSyncService(
         )
     }
 
+    suspend fun verifyReachable(baseUrl: String) {
+        client.fetchInfo(baseUrl)
+    }
+
     suspend fun refreshBooks(baseUrl: String): List<NanoBook> = client.listBooks(baseUrl)
 
     suspend fun refreshSettings(baseUrl: String): NanoSettings = client.fetchSettings(baseUrl)

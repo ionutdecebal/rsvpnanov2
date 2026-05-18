@@ -59,6 +59,7 @@ final class NanoViewModel: ObservableObject {
             let local = try await companionController.refreshLocal()
             pendingUploads = local.drafts.map(pendingUpload(from:))
             rssFeeds = local.rssFeeds
+            _ = await connectOnce(showBusy: false)
         } catch {
             lastConnectionError = error.localizedDescription
             pendingUploads = []
@@ -87,7 +88,7 @@ final class NanoViewModel: ObservableObject {
 
     func refreshBooks() {
         Task {
-            await run("Refreshing") { [self] in
+            await run("Refreshing", requiresConnection: true) { [self] in
                 let snapshot = try await companionController.refreshDevice(baseUrl: self.address, localRssFeeds: self.rssFeeds)
                 self.books = snapshot.books
                 self.deviceSettings = snapshot.settings
@@ -104,7 +105,7 @@ final class NanoViewModel: ObservableObject {
 
     func refreshSettings() {
         Task {
-            await run("Reading settings") { [self] in
+            await run("Reading settings", requiresConnection: true) { [self] in
                 let snapshot = try await companionController.refreshSettings(baseUrl: self.address)
                 self.deviceSettings = snapshot.settings
                 if let wifi = snapshot.wifiSettings {
@@ -117,7 +118,7 @@ final class NanoViewModel: ObservableObject {
 
     func saveSettings(_ settings: NanoSettings) {
         Task {
-            await run("Saving settings") { [self] in
+            await run("Saving settings", requiresConnection: true) { [self] in
                 let next = settings.withAccurateTimeEstimate(value: true)
                 self.deviceSettings = try await companionController.saveSettings(baseUrl: self.address, settings: next).settings
                 self.status = "Device settings saved. Exit sync on the reader to apply all changes."
@@ -127,7 +128,7 @@ final class NanoViewModel: ObservableObject {
 
     func refreshWifiSettings() {
         Task {
-            await run("Reading Wi-Fi settings") { [self] in
+            await run("Reading Wi-Fi settings", requiresConnection: true) { [self] in
                 self.applyWifiSettings(try await companionController.refreshWifiSettings(baseUrl: self.address).wifiSettings)
                 self.status = "Wi-Fi settings refreshed."
             }
@@ -142,7 +143,7 @@ final class NanoViewModel: ObservableObject {
             return
         }
         Task {
-            await run("Saving Wi-Fi") { [self] in
+            await run("Saving Wi-Fi", requiresConnection: true) { [self] in
                 let wifi = try await companionController.saveWifiSettings(
                     baseUrl: self.address,
                     ssid: ssid,
@@ -156,7 +157,7 @@ final class NanoViewModel: ObservableObject {
 
     func forgetWifiSettings() {
         Task {
-            await run("Clearing Wi-Fi") { [self] in
+            await run("Clearing Wi-Fi", requiresConnection: true) { [self] in
                 self.applyWifiSettings(try await companionController.clearWifiSettings(baseUrl: self.address).wifiSettings)
                 self.status = "Wi-Fi credentials cleared."
             }
@@ -165,7 +166,7 @@ final class NanoViewModel: ObservableObject {
 
     func refreshRssFeeds() {
         Task {
-            await run("Reading RSS feeds") { [self] in
+            await run("Reading RSS feeds", requiresConnection: true) { [self] in
                 let snapshot = try await companionController.refreshRssFeeds(
                     baseUrl: self.address,
                     localRssFeeds: self.rssFeeds
@@ -205,7 +206,7 @@ final class NanoViewModel: ObservableObject {
     }
 
     private func saveRssFeeds(_ feeds: [String], status successStatus: String) async {
-        await run("Saving RSS feeds", showBusy: isConnected) { [self] in
+        await run("Saving RSS feeds", showBusy: isConnected, requiresConnection: isConnected) { [self] in
             let snapshot = try await companionController.saveRssFeeds(
                 baseUrl: self.address,
                 feeds: feeds,
@@ -227,7 +228,7 @@ final class NanoViewModel: ObservableObject {
 
     func upload(_ file: PickedBookFile) {
         Task {
-            await run("Preparing \(file.filename)") { [self] in
+            await run("Preparing \(file.filename)", requiresConnection: true) { [self] in
                 do {
                     let converted = try shared.RsvpConverter.shared.bookFile(
                         data: kotlinByteArray(from: file.data),
@@ -255,7 +256,7 @@ final class NanoViewModel: ObservableObject {
 
     func upload(_ file: shared.RsvpBookFile) {
         Task {
-            await run("Uploading \(file.title)") { [self] in
+            await run("Uploading \(file.title)", requiresConnection: true) { [self] in
                 try await self.uploadConverted(file)
             }
         }
@@ -269,7 +270,10 @@ final class NanoViewModel: ObservableObject {
     func deleteBooks(_ booksToDelete: [NanoBook]) {
         guard !booksToDelete.isEmpty else { return }
         Task {
-            await run(booksToDelete.count == 1 ? "Deleting \(booksToDelete[0].displayTitle)" : "Deleting books") { [self] in
+            await run(
+                booksToDelete.count == 1 ? "Deleting \(booksToDelete[0].displayTitle)" : "Deleting books",
+                requiresConnection: true
+            ) { [self] in
                 let snapshot = try await companionController.deleteBooks(
                     baseUrl: self.address,
                     bookIds: booksToDelete.map(\.id)
@@ -340,7 +344,10 @@ final class NanoViewModel: ObservableObject {
     func syncPendingUploads() {
         let items = pendingUploads
         Task {
-            await run(items.count == 1 ? "Syncing \(items[0].title)" : "Syncing saved articles") { [self] in
+            await run(
+                items.count == 1 ? "Syncing \(items[0].title)" : "Syncing saved articles",
+                requiresConnection: true
+            ) { [self] in
                 let snapshot = try await companionController.syncPendingUploads(
                     baseUrl: self.address,
                     items: items.map(sharedPendingUpload(from:))
@@ -354,7 +361,7 @@ final class NanoViewModel: ObservableObject {
 
     func syncPendingUpload(_ item: PendingUpload) {
         Task {
-            await run("Syncing \(item.title)") { [self] in
+            await run("Syncing \(item.title)", requiresConnection: true) { [self] in
                 let snapshot = try await companionController.syncPendingUploads(
                     baseUrl: self.address,
                     items: [self.sharedPendingUpload(from: item)]
@@ -386,20 +393,7 @@ final class NanoViewModel: ObservableObject {
             self.hasAttemptedConnection = true
             let address = self.normalizedAddress(self.address)
             let snapshot = try await companionController.connect(baseUrl: address, localRssFeeds: self.rssFeeds)
-            let device = snapshot.device
-            self.address = address
-            self.info = device.info
-            self.books = device.books
-            self.deviceSettings = device.settings
-            if let wifi = device.wifiSettings {
-                self.applyWifiSettings(wifi)
-            }
-            self.rssFeeds = snapshot.rssFeeds
-            self.syncedRssFeeds = snapshot.syncedRssFeeds
-            self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
-            self.lastConnectionError = nil
-            self.showAddressEntry = false
-            self.status = "Connected to \(self.info?.name ?? "RSVP Nano"). Reading /books."
+            self.applyConnectionSnapshot(snapshot, address: address)
         }
         return isConnected
     }
@@ -410,16 +404,26 @@ final class NanoViewModel: ObservableObject {
         self.status = uploadStatus(for: file)
     }
 
-    private func run(_ busyStatus: String, showBusy: Bool = true, operation: @escaping () async throws -> Void) async {
+    private func run(
+        _ busyStatus: String,
+        showBusy: Bool = true,
+        requiresConnection: Bool = false,
+        operation: @escaping () async throws -> Void
+    ) async {
         if showBusy {
             isBusy = true
         }
         status = busyStatus
         do {
+            if requiresConnection {
+                try await companionController.verifyReachable(baseUrl: normalizedAddress(address))
+            }
             try await operation()
         } catch {
             lastConnectionError = error.localizedDescription
-            if !isConnected && normalizedAddress(address) == Self.defaultDeviceAddress {
+            if requiresConnection {
+                markDisconnected("Reader disconnected. Reconnect to RSVP Nano before continuing.")
+            } else if !isConnected && normalizedAddress(address) == Self.defaultDeviceAddress {
                 showAddressEntry = true
                 status = "Could not find RSVP Nano at \(Self.defaultDeviceAddress). Check the Nano Wi-Fi, or enter the address shown on the reader."
             } else {
@@ -429,6 +433,33 @@ final class NanoViewModel: ObservableObject {
         if showBusy {
             isBusy = false
         }
+    }
+
+    private func applyConnectionSnapshot(_ snapshot: shared.CompanionConnectSnapshot, address: String) {
+        let device = snapshot.device
+        self.address = address
+        self.info = device.info
+        self.books = device.books
+        self.deviceSettings = device.settings
+        if let wifi = device.wifiSettings {
+            self.applyWifiSettings(wifi)
+        }
+        self.rssFeeds = snapshot.rssFeeds
+        self.syncedRssFeeds = snapshot.syncedRssFeeds
+        self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
+        self.lastConnectionError = nil
+        self.showAddressEntry = false
+        self.status = "Connected to \(self.info?.name ?? "RSVP Nano"). Reading /books."
+    }
+
+    private func markDisconnected(_ message: String) {
+        info = nil
+        books = []
+        deviceSettings = nil
+        wifiSettings = nil
+        lastConnectionError = message
+        showAddressEntry = normalizedAddress(address) == Self.defaultDeviceAddress
+        status = message
     }
 
     private func uploadStatus(for file: shared.RsvpBookFile) -> String {

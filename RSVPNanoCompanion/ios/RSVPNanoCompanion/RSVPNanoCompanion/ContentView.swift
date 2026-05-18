@@ -75,7 +75,12 @@ struct ContentView: View {
             Task { await viewModel.refreshPendingUploads() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            Task { await viewModel.refreshPendingUploads() }
+            Task {
+                await viewModel.refreshPendingUploads()
+                if !viewModel.isConnected {
+                    viewModel.connect(showBusy: false)
+                }
+            }
         }
         .onOpenURL { url in
             if url.scheme == "rsvpnano", url.host == "inbox" {
@@ -128,9 +133,9 @@ struct ContentView: View {
                     Text("Join the network shown on the reader. It starts with RSVP-Nano.")
                         .foregroundStyle(.secondary)
 
-                    Label("Test the default address", systemImage: "3.circle")
+                    Label("Return to this app", systemImage: "3.circle")
                         .font(.headline)
-                    Text("Return here and test http://192.168.4.1.")
+                    Text("The app checks http://192.168.4.1 automatically when it becomes active again.")
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
@@ -144,7 +149,7 @@ struct ContentView: View {
                 Button {
                     viewModel.connectDefault()
                 } label: {
-                    Label("Test Connection", systemImage: "network")
+                    Label("Check Now", systemImage: "network")
                 }
                 .disabled(viewModel.isBusy)
             }
