@@ -77,14 +77,18 @@ internal object RsvpTextUtils {
     }
 
     fun htmlEvents(markup: String): List<RsvpEvent> {
+        val blockBreak = "\u0000"
         var text = markup
         skipTags.forEach { tag ->
             text = text.replace(Regex("(?is)<$tag\\b.*?</$tag>"), " ")
         }
-        text = text.replace(Regex("(?is)<h[1-6][^>]*>(.*?)</h[1-6]>"), "\n@chapter $1\n")
-        text = text.replace(Regex("(?i)</?(${blockTags.joinToString("|")})\\b[^>]*>"), "\n")
+        text = text.replace(Regex("(?is)<h[1-6][^>]*>(.*?)</h[1-6]>"), "$blockBreak@chapter $1$blockBreak")
+        text = text.replace(Regex("(?i)<br\\b[^>]*>"), blockBreak)
+        text = text.replace(Regex("(?i)</(${blockTags.joinToString("|")})\\b[^>]*>"), blockBreak)
+        text = text.replace(Regex("(?i)<(${blockTags.joinToString("|")})\\b[^>]*>"), " ")
         text = text.replace(Regex("(?is)<[^>]+>"), " ")
         text = decodeEntities(text)
+        text = text.replace(Regex("[\\r\\n\\t]+"), " ").replace(blockBreak, "\n")
 
         return text.lineSequence().map(::cleanedLine).mapNotNull { line ->
             when {
@@ -145,6 +149,12 @@ internal object RsvpTextUtils {
             .filter { token -> token.isNotEmpty() && token.any(Char::isLetterOrDigit) }
     }
 
+    fun outputTokens(text: String): List<String> {
+        return cleanedLine(text)
+            .split(Regex("[\\s]+"))
+            .filter { token -> token.isNotEmpty() }
+    }
+
     fun chapterTitle(line: String): String? {
         val trimmed = cleanedLine(line)
         if (trimmed.isEmpty() || trimmed.length > 64) {
@@ -173,6 +183,13 @@ internal object RsvpTextUtils {
             "&#39;" to "'",
             "&apos;" to "'",
             "&nbsp;" to " ",
+            "&ldquo;" to "\"",
+            "&rdquo;" to "\"",
+            "&lsquo;" to "'",
+            "&rsquo;" to "'",
+            "&ndash;" to "-",
+            "&mdash;" to "-",
+            "&hellip;" to "...",
         ).forEach { (entity, replacement) ->
             text = text.replace(entity, replacement)
         }

@@ -50,14 +50,19 @@ internal class RsvpWriter(
     }
 
     fun addText(text: String) {
-        RsvpTextUtils.cleanWordTokens(text).forEach { word ->
+        val readableTokens = RsvpTextUtils.cleanWordTokens(text)
+        var readableIndex = 0
+        RsvpTextUtils.outputTokens(text).forEach { word ->
             val projected = if (lineWords.isEmpty()) word.length else lineLength + 1 + word.length
             if (lineWords.isNotEmpty() && projected > RsvpConverter.wrapWidth) {
                 flushLine()
             }
             lineWords += word
             lineLength = if (lineWords.size == 1) word.length else lineLength + 1 + word.length
-            wordCount += 1
+            if (readableIndex < readableTokens.size && word == readableTokens[readableIndex]) {
+                wordCount += 1
+                readableIndex += 1
+            }
         }
     }
 

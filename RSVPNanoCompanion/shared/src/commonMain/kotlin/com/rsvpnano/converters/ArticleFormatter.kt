@@ -41,7 +41,16 @@ object ArticleFormatter {
     }
 
     private fun fallbackTitle(from: String): String {
-        val host = from.substringAfter("//", missingDelimiterValue = "")
+        val withoutScheme = from.substringAfter("//", missingDelimiterValue = from)
+        val sourceLabel = withoutScheme
+            .substringBefore("?")
+            .substringBefore("#")
+            .trim('/')
+        if (sourceLabel.isNotBlank()) {
+            return sourceLabel
+        }
+
+        val host = withoutScheme
             .substringBefore("/")
             .substringBefore(":")
         return if (host.isBlank()) "Shared Article" else host
@@ -55,6 +64,7 @@ object ArticleFormatter {
 
         if (RsvpTextUtils.looksLikeHTML(htmlOrText)) {
             htmlTitle(from = htmlOrText)?.let { return it }
+            return fallbackTitle(from = source)
         }
 
         return RsvpTextUtils.titleFromText(htmlOrText, fallback = fallbackTitle(from = source))

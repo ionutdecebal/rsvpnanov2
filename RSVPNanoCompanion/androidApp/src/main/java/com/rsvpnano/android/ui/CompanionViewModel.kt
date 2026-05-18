@@ -53,6 +53,8 @@ class CompanionViewModel(
     private val companionController = sharedApp.companionController
     private val _uiState = MutableStateFlow(CompanionUiState(status = "Loading shared data..."))
     val uiState: StateFlow<CompanionUiState> = _uiState
+    private val current: CompanionUiState
+        get() = _uiState.value
 
     init {
         refresh()
@@ -537,6 +539,12 @@ class CompanionViewModel(
 
     private fun updateState(transform: (CompanionUiState) -> CompanionUiState) {
         _uiState.update(transform)
+    }
+
+    private fun hostName(url: String): String {
+        return runCatching {
+            URI(url).host.orEmpty().ifEmpty { url.substringAfter("://").substringBefore("/") }
+        }.getOrDefault(url.substringAfter("://").substringBefore("/"))
     }
 
     class Factory(

@@ -198,6 +198,12 @@ def iter_clean_words(text: str):
             yield token
 
 
+def iter_output_tokens(text: str):
+    for token in re.split(r"\s+", clean_text(text)):
+        if token:
+            yield token
+
+
 class RsvpWriter:
     def __init__(self, title: str, source: str, max_words: int, author: str = "") -> None:
         self.lines: list[str] = [
@@ -239,7 +245,9 @@ class RsvpWriter:
             self.lines.append("@para")
 
     def add_text(self, text: str) -> bool:
-        for word in iter_clean_words(text):
+        readable_words = list(iter_clean_words(text))
+        readable_index = 0
+        for word in iter_output_tokens(text):
             if self.max_words > 0 and self.word_count >= self.max_words:
                 return False
 
@@ -249,7 +257,9 @@ class RsvpWriter:
 
             self._line_words.append(word)
             self._line_length = len(word) if self._line_length == 0 else self._line_length + 1 + len(word)
-            self.word_count += 1
+            if readable_index < len(readable_words) and word == readable_words[readable_index]:
+                self.word_count += 1
+                readable_index += 1
 
         return True
 

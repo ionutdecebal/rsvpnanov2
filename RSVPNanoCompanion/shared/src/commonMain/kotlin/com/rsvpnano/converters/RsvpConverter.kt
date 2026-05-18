@@ -4,12 +4,15 @@ object RsvpConverter {
     const val wrapWidth = 96
 
     fun bookFile(data: ByteArray, filename: String): RsvpBookFile {
-        if (filename.lowercase().endsWith(".rsvp")) {
+        if (RsvpSupportedFileTypes.isRsvp(filename)) {
             return RsvpBookFile(filename = filename, data = data, title = filenameWithoutExtension(filename))
         }
 
-        if (filename.lowercase().endsWith(".epub")) {
-            return EpubConverter.convert(data, filename)
+        if (RsvpSupportedFileTypes.isEpub(filename)) {
+            return EpubBookConverter.convert(
+                entries = EpubZipReader.readEntries(data),
+                filename = filename,
+            )
         }
 
         val rawText = RsvpTextUtils.decodeText(data) ?: throw RsvpConversionError.unreadableText

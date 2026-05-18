@@ -34,6 +34,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rsvpnano.app.RsvpSharedApp
+import com.rsvpnano.converters.RsvpSupportedFileTypes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -483,11 +484,7 @@ private fun String.isHttpUrl(): Boolean {
 private fun String.isTextMimeType(): Boolean = startsWith("text/")
 
 private fun String.isTextFileName(): Boolean {
-    val value = lowercase()
-    return value.endsWith(".txt") ||
-        value.endsWith(".md") ||
-        value.endsWith(".html") ||
-        value.endsWith(".htm")
+    return RsvpSupportedFileTypes.isTextLike(this)
 }
 
 private fun Context.openWifiSettings() {
