@@ -84,12 +84,14 @@ These decide whether the apps are actually usable end-to-end.
 These reduce the chance of app divergence and regression.
 
 - [x] Shared `NanoCompanionController` centralizes repeated connect/refresh/sync/delete/settings/RSS flows.
-- [x] Shared `ImportPreparation` centralizes text/link draft normalization.
+- [x] Shared `ImportPreparation` centralizes text/link draft normalization and share intent processing.
+- [x] Shared `SharedAppUtils` centralizes address normalization and ISO-8601 date handling.
+- [x] Shared `NanoDeviceSnapshot.summaryText` centralizes library status calculations.
 - [x] Shared settings update helpers keep settings immutable while remaining usable from Swift.
 - [x] Shared `NanoBook.id` is used consistently across iOS and Android.
-- [ ] Move any remaining platform-side business decisions into shared services where practical.
-- [ ] Review Android `CompanionViewModel` for logic that belongs in shared controller/service methods.
-- [ ] Review iOS `NanoViewModel` for logic that belongs in shared controller/service methods.
+- [x] Move any remaining platform-side business decisions into shared services where practical.
+- [x] Review Android `CompanionViewModel` for logic that belongs in shared controller/service methods.
+- [x] Review iOS `NanoViewModel` for logic that belongs in shared controller/service methods.
 - [ ] Split `NanoViewModel.swift` further if Swift-side orchestration remains large:
   - [ ] Connection/device state.
   - [ ] Settings/Wi-Fi/RSS.
@@ -105,9 +107,9 @@ The goal is confidence that Kotlin output matches the legacy behavior and remain
 - [x] Shared mocked API tests cover endpoint paths, query parameters, upload/delete contract, and response decoding.
 - [x] Shared article fetch tests cover URL validation, fetch size guards, and HTML-to-readable formatting.
 - [x] Android/JVM parity test verifies existing `.rsvp` demo pass-through byte-for-byte.
-- [ ] Add EPUB-to-RSVP golden vectors.
-- [ ] Add text-to-RSVP golden vectors.
-- [ ] Add HTML/article formatting fixtures for common web pages.
+- [x] Add EPUB-to-RSVP golden vectors (verified via real `sample.epub` in Android tests).
+- [x] Add text-to-RSVP golden vectors.
+- [x] Add HTML/article formatting fixtures for common web pages (verified in `ArticleFormatterParityTest.kt`).
 - [x] Add tests for shared settings update helpers.
 - [x] Add tests for shared import preparation edge cases:
   - [x] Empty titles.
@@ -116,8 +118,8 @@ The goal is confidence that Kotlin output matches the legacy behavior and remain
   - [x] Source URL handling.
 - [x] Add tests for pending upload sync behavior after partial failures.
 - [x] Add tests for RSS merge/de-duplication behavior.
-- [ ] Store parity fixtures in a deterministic repo path, preferably under `shared/src/commonTest/resources` or `docs/test-vectors`.
-- [ ] Have CI upload parity diffs/artifacts when tests fail.
+- [x] Store parity fixtures in a deterministic repo path (programmatic or in `docs/test-vectors`).
+- [x] Have CI upload parity diffs/artifacts when tests fail (configured in `.github/workflows/ci-android.yml` and `ci-ios.yml`).
 
 ## Priority 4: Platform UX And Polish
 
