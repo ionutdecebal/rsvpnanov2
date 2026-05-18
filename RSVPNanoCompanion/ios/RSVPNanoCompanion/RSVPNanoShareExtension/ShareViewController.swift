@@ -4,7 +4,7 @@ import shared
 
 final class ShareViewController: UIViewController {
     private static let maxSharedTextCharacters = 300_000
-    private let sharedFacade = IosSharedWiringKt.createIosSharedFacade(appGroupIdentifier: SharedInbox.appGroupIdentifier)
+    private let companionController = IosSharedWiringKt.createIosCompanionController(appGroupIdentifier: SharedInbox.appGroupIdentifier)
     private let sharedDateFormatter = ISO8601DateFormatter()
 
     private let titleField = UITextField()
@@ -264,16 +264,27 @@ final class ShareViewController: UIViewController {
                 sharedDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 let createdAt = sharedDateFormatter.string(from: Date())
                 let source = sharedSource.trimmingCharacters(in: .whitespacesAndNewlines)
-                let sourceUrl = source.isEmpty ? nil : source
-                let pending = shared.PendingUpload(
-                    id: UUID().uuidString,
-                    title: title.isEmpty ? "Shared Article" : title,
-                    sourceUrl: sourceUrl,
-                    body: text,
-                    createdAt: createdAt
-                )
-                try await sharedFacade.saveDraft(item: pending)
-                let savedCount = try await sharedFacade.loadDrafts().count
+                let pending: shared.PendingUpload
+                if sourceIsURL {
+                    pending = shared.ImportPreparation.shared.pendingUploadForUrl(
+                        id: UUID().uuidString,
+                        title: title,
+                        source: source,
+                        host: URL(string: source)?.host ?? "",
+                        createdAt: createdAt
+                    )
+                } else {
+                    pending = shared.ImportPreparation.shared.pendingUploadForText(
+                        id: UUID().uuidString,
+                        title: title,
+                        source: source,
+                        text: text,
+                        createdAt: createdAt,
+                        fallbackTitle: "Shared Article"
+                    )
+                }
+                let snapshot = try await companionController.saveDraft(item: pending)
+                let savedCount = snapshot.drafts.count
                 let bytes = Data(text.utf8).count
                 await MainActor.run {
                     hasSaved = true

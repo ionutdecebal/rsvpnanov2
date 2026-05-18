@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rsvpnano.app.NanoDeviceSyncService
 import com.rsvpnano.app.RsvpSharedApp
+import com.rsvpnano.converters.ImportPreparation
 import com.rsvpnano.converters.RsvpConverter
 import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoSettings
@@ -263,12 +264,13 @@ class CompanionViewModel(
             }
             val existing = state.editingDraftId?.let { id -> state.drafts.firstOrNull { it.id == id } }
             val snapshot = companionController.saveDraft(
-                PendingUpload(
+                ImportPreparation.pendingUploadForText(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
-                    sourceUrl = state.draftSourceUrl.trim().ifEmpty { null },
-                    body = body,
+                    source = state.draftSourceUrl,
+                    text = body,
                     createdAt = existing?.createdAt ?: Instant.now().toString(),
+                    fallbackTitle = "Untitled",
                 )
             )
             clearDraftEditor(
@@ -289,11 +291,11 @@ class CompanionViewModel(
             }
             val existing = state.editingDraftId?.let { id -> state.drafts.firstOrNull { it.id == id } }
             val snapshot = companionController.saveDraft(
-                PendingUpload(
+                ImportPreparation.pendingUploadForUrl(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
-                    sourceUrl = sourceUrl,
-                    body = "",
+                    source = sourceUrl,
+                    host = "",
                     createdAt = existing?.createdAt ?: Instant.now().toString(),
                 )
             )
