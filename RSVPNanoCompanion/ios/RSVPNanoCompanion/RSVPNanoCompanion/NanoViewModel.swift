@@ -4,8 +4,6 @@ import shared
 
 @MainActor
 final class NanoViewModel: ObservableObject {
-    private let sharedFacade = IosSharedWiringKt.createIosSharedFacade(appGroupIdentifier: SharedInbox.appGroupIdentifier)
-    private let deviceSyncService = IosSharedWiringKt.createIosDeviceSyncService()
     private let companionController = IosSharedWiringKt.createIosCompanionController(appGroupIdentifier: SharedInbox.appGroupIdentifier)
     private let sharedDateFormatter = ISO8601DateFormatter()
     private let sharedFallbackDateFormatter = ISO8601DateFormatter()
@@ -272,8 +270,8 @@ final class NanoViewModel: ObservableObject {
 
     func refreshPendingUploads() async {
         do {
-            let sharedItems = try await sharedFacade.loadDrafts()
-            pendingUploads = sharedItems.map(pendingUpload(from:))
+            let snapshot = try await companionController.refreshDrafts()
+            pendingUploads = snapshot.drafts.map(pendingUpload(from:))
         } catch {
             lastConnectionError = error.localizedDescription
             pendingUploads = []
@@ -296,11 +294,10 @@ final class NanoViewModel: ObservableObject {
             isBusy = true
             status = "Fetching article text"
             do {
-                let article = try await sharedFacade.fetchArticle(title: item.title, source: item.source)
-                try await sharedFacade.updateDraft(item: sharedPendingUpload(from: item), title: article.title, body: article.text)
-                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
+                let snapshot = try await companionController.fetchArticle(item: sharedPendingUpload(from: item))
+                pendingUploads = snapshot.drafts.map(pendingUpload(from:))
                 lastConnectionError = nil
-                status = "Fetched article text for \(article.title)."
+                status = "Fetched article text for \(snapshot.article.title)."
             } catch {
                 lastConnectionError = error.localizedDescription
                 status = "Could not fetch article text."
@@ -312,8 +309,12 @@ final class NanoViewModel: ObservableObject {
     func savePendingUpload(_ item: PendingUpload, title: String, body: String) {
         Task {
             do {
-                try await sharedFacade.updateDraft(item: sharedPendingUpload(from: item), title: title, body: body)
-                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
+                let snapshot = try await companionController.updateDraft(
+                    item: sharedPendingUpload(from: item),
+                    title: title,
+                    body: body
+                )
+                pendingUploads = snapshot.drafts.map(pendingUpload(from:))
                 editingArticle = nil
                 lastConnectionError = nil
                 status = "Saved \(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.title : title)."
@@ -359,8 +360,8 @@ final class NanoViewModel: ObservableObject {
                 let ids = offsets.compactMap { index in
                     index < pendingUploads.count ? pendingUploads[index].id.uuidString : nil
                 }
-                try await sharedFacade.deleteDrafts(ids: ids)
-                pendingUploads = try await sharedFacade.loadDrafts().map(pendingUpload(from:))
+                let snapshot = try await companionController.deleteDrafts(ids: ids)
+                pendingUploads = snapshot.drafts.map(pendingUpload(from:))
             } catch {
                 lastConnectionError = error.localizedDescription
             }
@@ -380,7 +381,7 @@ final class NanoViewModel: ObservableObject {
                 self.applyWifiSettings(wifi)
             }
             self.rssFeeds = snapshot.rssFeeds
-            self.syncedRssFeeds = self.sharedFacade.mergeRssFeeds(localFeeds: [], deviceFeeds: device.rssFeeds?.feeds ?? [])
+            self.syncedRssFeeds = snapshot.syncedRssFeeds
             self.pendingUploads = snapshot.drafts.map(pendingUpload(from:))
             self.lastConnectionError = nil
             self.status = "Connected to \(self.info?.name ?? "RSVP Nano"). Reading /books."

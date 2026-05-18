@@ -33,6 +33,7 @@ class NanoCompanionControllerTest {
 
         assertEquals("Nano", snapshot.device.info?.name)
         assertEquals(listOf("https://local.example/feed", "https://device.example/feed"), snapshot.rssFeeds)
+        assertEquals(listOf("https://device.example/feed"), snapshot.syncedRssFeeds)
         assertEquals(snapshot.rssFeeds, rssStore.items)
         assertEquals(1, snapshot.drafts.size)
     }
@@ -53,6 +54,38 @@ class NanoCompanionControllerTest {
         assertEquals(emptyList(), snapshot.drafts)
         assertEquals("Example.rsvp", client.uploadedFilename)
         assertEquals(listOf(NanoBook(id = "Example.rsvp", title = "Example")), snapshot.books)
+    }
+
+    @Test
+    fun draftMutationsReturnLatestDrafts() = runBlocking {
+        val existing = samplePendingUpload()
+        val pendingStore = InMemoryPendingStore(listOf(existing))
+        val controller = controller(pendingStore, InMemoryRssStore(), RecordingNanoClient())
+        val added = existing.copy(id = "2", title = "Second")
+
+        val saved = controller.saveDraft(added)
+        val updated = controller.updateDraft(added, title = "Updated", body = "Updated body")
+        val deleted = controller.deleteDraft(existing)
+
+        assertEquals(listOf("Second", "Example"), saved.drafts.map { it.title })
+        assertEquals(listOf("Updated", "Example"), updated.drafts.map { it.title })
+        assertEquals(listOf("Updated"), deleted.drafts.map { it.title })
+    }
+
+    @Test
+    fun deleteDraftsRemovesMatchingIds() = runBlocking {
+        val pendingStore = InMemoryPendingStore(
+            listOf(
+                samplePendingUpload().copy(id = "1"),
+                samplePendingUpload().copy(id = "2"),
+                samplePendingUpload().copy(id = "3"),
+            )
+        )
+        val controller = controller(pendingStore, InMemoryRssStore(), RecordingNanoClient())
+
+        val snapshot = controller.deleteDrafts(listOf("1", "3"))
+
+        assertEquals(listOf("2"), snapshot.drafts.map { it.id })
     }
 
     @Test

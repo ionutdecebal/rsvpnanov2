@@ -236,7 +236,7 @@ class CompanionViewModel(
                 return@launch
             }
             val existing = state.editingDraftId?.let { id -> state.drafts.firstOrNull { it.id == id } }
-            sharedApp.facade.saveDraft(
+            val snapshot = companionController.saveDraft(
                 PendingUpload(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
@@ -246,7 +246,7 @@ class CompanionViewModel(
                 )
             )
             clearDraftEditor(
-                drafts = sharedApp.facade.loadDrafts(),
+                drafts = snapshot.drafts,
                 status = if (existing == null) "Text draft saved locally." else "Text draft updated.",
             )
         }
@@ -262,7 +262,7 @@ class CompanionViewModel(
                 return@launch
             }
             val existing = state.editingDraftId?.let { id -> state.drafts.firstOrNull { it.id == id } }
-            sharedApp.facade.saveDraft(
+            val snapshot = companionController.saveDraft(
                 PendingUpload(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     title = title,
@@ -272,7 +272,7 @@ class CompanionViewModel(
                 )
             )
             clearDraftEditor(
-                drafts = sharedApp.facade.loadDrafts(),
+                drafts = snapshot.drafts,
                 status = if (existing == null) {
                     "Link draft saved locally. Fetch it before syncing."
                 } else {
@@ -300,8 +300,7 @@ class CompanionViewModel(
 
     fun deleteDraft(draft: PendingUpload) {
         viewModelScope.launch {
-            sharedApp.facade.deleteDraft(draft)
-            val drafts = sharedApp.facade.loadDrafts()
+            val drafts = companionController.deleteDraft(draft).drafts
             if (current.editingDraftId == draft.id) {
                 clearDraftEditor(drafts = drafts, status = "Draft deleted.")
             } else {
@@ -339,7 +338,7 @@ class CompanionViewModel(
                 setStatus("Connect to the reader before syncing saved articles.")
                 return@launch
             }
-            val readyDrafts = state.drafts.filterNot(sharedApp.facade::needsArticleFetch)
+            val readyDrafts = state.drafts.filterNot(companionController::needsArticleFetch)
             if (readyDrafts.isEmpty()) {
                 setStatus("No text drafts are ready to sync.")
                 return@launch
@@ -408,18 +407,14 @@ class CompanionViewModel(
 
     fun fetchMissingArticles() {
         viewModelScope.launch {
-            val missing = current.drafts.filter(sharedApp.facade::needsArticleFetch)
+            val missing = current.drafts.filter(companionController::needsArticleFetch)
             if (missing.isEmpty()) {
                 setStatus("No saved links need fetching.")
                 return@launch
             }
             setStatus("Fetching ${missing.size} saved links...")
             runCatching {
-                missing.forEach { draft ->
-                    val article = sharedApp.facade.fetchArticle(title = draft.title, source = draft.sourceUrl.orEmpty())
-                    sharedApp.facade.updateDraft(draft, article.title, article.text)
-                }
-                sharedApp.facade.loadDrafts()
+                companionController.fetchArticles(missing).drafts
             }.onSuccess { drafts ->
                 updateState { it.copy(drafts = drafts, status = "Fetched ${missing.size} saved links.") }
             }.onFailure { error ->
@@ -428,7 +423,7 @@ class CompanionViewModel(
         }
     }
 
-    fun needsArticleFetch(draft: PendingUpload): Boolean = sharedApp.facade.needsArticleFetch(draft)
+    fun needsArticleFetch(draft: PendingUpload): Boolean = companionController.needsArticleFetch(draft)
 
     private fun clearDraftEditor(
         drafts: List<PendingUpload> = current.drafts,

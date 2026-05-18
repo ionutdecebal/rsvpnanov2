@@ -2,6 +2,7 @@ package com.rsvpnano.app
 
 import com.rsvpnano.api.NanoClient
 import com.rsvpnano.converters.RsvpBookFile
+import com.rsvpnano.converters.SharedArticle
 import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoSettings
 import com.rsvpnano.models.NanoWifiSettings
@@ -25,12 +26,19 @@ class NanoCompanionController(
         )
     }
 
+    suspend fun refreshDrafts(): CompanionDraftsSnapshot {
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
     suspend fun connect(baseUrl: String, localRssFeeds: List<String>): CompanionConnectSnapshot {
         val device = deviceSyncService.connect(baseUrl)
-        val mergedFeeds = saveMergedRssFeeds(localRssFeeds, device.rssFeeds?.feeds.orEmpty())
+        val deviceFeeds = device.rssFeeds?.feeds.orEmpty()
+        val syncedFeeds = facade.mergeRssFeeds(localFeeds = emptyList(), deviceFeeds = deviceFeeds)
+        val mergedFeeds = saveMergedRssFeeds(localRssFeeds, syncedFeeds)
         return CompanionConnectSnapshot(
             device = device,
             rssFeeds = mergedFeeds,
+            syncedRssFeeds = syncedFeeds,
             drafts = facade.loadDrafts(),
         )
     }
@@ -59,6 +67,45 @@ class NanoCompanionController(
             syncedCount = items.size,
         )
     }
+
+    suspend fun saveDraft(item: PendingUpload): CompanionDraftsSnapshot {
+        facade.saveDraft(item)
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
+    suspend fun updateDraft(item: PendingUpload, title: String, body: String): CompanionDraftsSnapshot {
+        facade.updateDraft(item, title, body)
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
+    suspend fun deleteDraft(item: PendingUpload): CompanionDraftsSnapshot {
+        facade.deleteDraft(item)
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
+    suspend fun deleteDrafts(ids: List<String>): CompanionDraftsSnapshot {
+        facade.deleteDrafts(ids)
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
+    suspend fun fetchArticle(item: PendingUpload): CompanionArticleFetchSnapshot {
+        val article = facade.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
+        facade.updateDraft(item, article.title, article.text)
+        return CompanionArticleFetchSnapshot(
+            article = article,
+            drafts = facade.loadDrafts(),
+        )
+    }
+
+    suspend fun fetchArticles(items: List<PendingUpload>): CompanionDraftsSnapshot {
+        items.forEach { item ->
+            val article = facade.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
+            facade.updateDraft(item, article.title, article.text)
+        }
+        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+    }
+
+    fun needsArticleFetch(item: PendingUpload): Boolean = facade.needsArticleFetch(item)
 
     suspend fun saveRssFeeds(
         baseUrl: String,
@@ -158,6 +205,7 @@ data class CompanionLocalSnapshot(
 data class CompanionConnectSnapshot(
     val device: NanoDeviceSnapshot,
     val rssFeeds: List<String>,
+    val syncedRssFeeds: List<String>,
     val drafts: List<PendingUpload>,
 )
 
@@ -174,6 +222,15 @@ data class CompanionPendingSyncSnapshot(
     val drafts: List<PendingUpload>,
     val books: List<NanoBook>,
     val syncedCount: Int,
+)
+
+data class CompanionDraftsSnapshot(
+    val drafts: List<PendingUpload>,
+)
+
+data class CompanionArticleFetchSnapshot(
+    val article: SharedArticle,
+    val drafts: List<PendingUpload>,
 )
 
 data class CompanionRssSnapshot(
