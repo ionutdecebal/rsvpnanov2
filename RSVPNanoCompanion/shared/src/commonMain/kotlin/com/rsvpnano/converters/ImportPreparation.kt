@@ -64,4 +64,44 @@ object ImportPreparation {
             createdAt = createdAt,
         )
     }
+
+    fun prepareSharedImport(
+        id: String,
+        title: String,
+        text: String,
+        source: String,
+        createdAt: String,
+    ): PendingUpload? {
+        val body = text.trim()
+        if (body.isEmpty()) return null
+
+        val cleanedSource = source.trim()
+        val isUrl = body.startsWith("http://") || body.startsWith("https://")
+        val sourceIsUrl = cleanedSource.startsWith("http://") || cleanedSource.startsWith("https://")
+
+        return if (isUrl && (cleanedSource.isEmpty() || sourceIsUrl)) {
+            val url = cleanedSource.ifEmpty { body }
+            pendingUploadForUrl(
+                id = id,
+                title = title,
+                source = url,
+                host = hostName(url),
+                createdAt = createdAt,
+            )
+        } else {
+            pendingUploadForText(
+                id = id,
+                title = title,
+                source = cleanedSource,
+                text = body,
+                createdAt = createdAt,
+                fallbackTitle = "Shared Content",
+            )
+        }
+    }
+
+    private fun hostName(url: String): String {
+        val noProtocol = url.substringAfter("://")
+        return noProtocol.substringBefore("/")
+    }
 }

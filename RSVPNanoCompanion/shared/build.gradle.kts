@@ -39,6 +39,8 @@ kotlin {
 			implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3")
 			implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+			implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+
 			implementation("io.ktor:ktor-client-core:2.3.12")
 			implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
 			implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")

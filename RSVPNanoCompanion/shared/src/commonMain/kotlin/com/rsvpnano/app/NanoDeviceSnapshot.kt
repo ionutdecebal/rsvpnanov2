@@ -15,4 +15,19 @@ data class NanoDeviceSnapshot(
     val settings: NanoSettings? = null,
     val wifiSettings: NanoWifiSettings? = null,
     val rssFeeds: NanoRssFeeds? = null,
-)
+) {
+    val summaryText: String
+        get() {
+            val articleCount = books.count { it.category == "article" || it.id.lowercase().startsWith("articles/") }
+            val bookCount = books.count() - articleCount
+            val bookLabel = if (bookCount == 1) "book" else "books"
+            val articleLabel = if (articleCount == 1) "article" else "articles"
+            val knownProgressCount = books.count { it.progressPercent != null }
+            val base = "$bookCount $bookLabel · $articleCount $articleLabel"
+            return if (knownProgressCount > 0) {
+                "$base · $knownProgressCount with saved progress"
+            } else {
+                base
+            }
+        }
+}
