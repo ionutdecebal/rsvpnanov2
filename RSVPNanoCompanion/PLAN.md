@@ -108,7 +108,7 @@ The goal is confidence that Kotlin output matches the legacy behavior and remain
 - [ ] Add EPUB-to-RSVP golden vectors.
 - [ ] Add text-to-RSVP golden vectors.
 - [ ] Add HTML/article formatting fixtures for common web pages.
-- [ ] Add tests for shared settings update helpers.
+- [x] Add tests for shared settings update helpers.
 - [ ] Add tests for shared import preparation edge cases:
   - [ ] Empty titles.
   - [ ] URL title/host cleanup.
