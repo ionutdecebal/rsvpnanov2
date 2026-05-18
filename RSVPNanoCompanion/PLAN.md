@@ -58,7 +58,7 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
 
 **Refactor Backlog**
 1. Remove stale Swift converter target references and any unused Swift converter files once shared converter usage is confirmed by iOS CI. Target references are removed; physical files are already absent from the iOS source folder.
-2. Split `ContentView.swift` into focused SwiftUI views: connection, library, articles, RSS, settings, help, and article editor.
+2. Split `ContentView.swift` into focused SwiftUI views: library, articles, settings, help, and article editor are split; connection currently lives with the library entry flow.
 3. Split `NanoViewModel.swift` by responsibility if Swift-side orchestration remains: connection/device state, settings/RSS, drafts/articles, and Swift/Kotlin conversion helpers.
 4. Keep shrinking platform ViewModels so they map shared snapshots to UI state only; business rules should stay in shared services/controllers.
 5. Update stale plan/documentation references that still describe already-completed ports as future work.
