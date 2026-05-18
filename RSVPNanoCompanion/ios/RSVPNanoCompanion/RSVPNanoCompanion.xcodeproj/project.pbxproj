@@ -19,6 +19,7 @@
 		0A1000200000000000000001 /* HelpPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000200000000000000001 /* HelpPage.swift */; };
 		0A1000210000000000000001 /* ArticleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000210000000000000001 /* ArticleEditorView.swift */; };
 		0A1000220000000000000001 /* LibraryPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000220000000000000001 /* LibraryPage.swift */; };
+		0A1000230000000000000001 /* ArticlesPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000230000000000000001 /* ArticlesPage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		0A2000200000000000000001 /* HelpPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpPage.swift; sourceTree = "<group>"; };
 		0A2000210000000000000001 /* ArticleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleEditorView.swift; sourceTree = "<group>"; };
 		0A2000220000000000000001 /* LibraryPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPage.swift; sourceTree = "<group>"; };
+		0A2000230000000000000001 /* ArticlesPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticlesPage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +99,7 @@
 				0A2000010000000000000001 /* RSVPNanoCompanionApp.swift */,
 				0A2000020000000000000001 /* ContentView.swift */,
 				0A2000220000000000000001 /* LibraryPage.swift */,
+				0A2000230000000000000001 /* ArticlesPage.swift */,
 				0A2000200000000000000001 /* HelpPage.swift */,
 				0A2000210000000000000001 /* ArticleEditorView.swift */,
 				0A2000190000000000000001 /* NanoViewModel.swift */,
@@ -230,6 +233,7 @@
 				0A1000020000000000000001 /* ContentView.swift in Sources */,
 				0A1000190000000000000001 /* NanoViewModel.swift in Sources */,
 				0A1000220000000000000001 /* LibraryPage.swift in Sources */,
+				0A1000230000000000000001 /* ArticlesPage.swift in Sources */,
 				0A1000200000000000000001 /* HelpPage.swift in Sources */,
 				0A1000210000000000000001 /* ArticleEditorView.swift in Sources */,
 				0A1000040000000000000001 /* Models.swift in Sources */,
