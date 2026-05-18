@@ -35,6 +35,14 @@ jobs:
           java-version: '17'
       - name: Run shared tests
         run: bash ./gradlew :shared:check --no-daemon
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
       - name: Build shared XCFramework
         run: bash RSVPNanoCompanion/tools/build_shared_xcframework.sh
       - name: Upload shared artifacts
