@@ -109,11 +109,11 @@ The goal is confidence that Kotlin output matches the legacy behavior and remain
 - [ ] Add text-to-RSVP golden vectors.
 - [ ] Add HTML/article formatting fixtures for common web pages.
 - [x] Add tests for shared settings update helpers.
-- [ ] Add tests for shared import preparation edge cases:
-  - [ ] Empty titles.
-  - [ ] URL title/host cleanup.
-  - [ ] Text title inference.
-  - [ ] Source URL handling.
+- [x] Add tests for shared import preparation edge cases:
+  - [x] Empty titles.
+  - [x] URL title/host cleanup.
+  - [x] Text title inference.
+  - [x] Source URL handling.
 - [ ] Add tests for pending upload sync behavior after partial failures.
 - [ ] Add tests for RSS merge/de-duplication behavior.
 - [ ] Store parity fixtures in a deterministic repo path, preferably under `shared/src/commonTest/resources` or `docs/test-vectors`.
