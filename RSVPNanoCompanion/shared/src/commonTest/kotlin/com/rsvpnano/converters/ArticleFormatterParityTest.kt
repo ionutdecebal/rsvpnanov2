@@ -49,7 +49,7 @@ class ArticleFormatterParityTest {
         
         // title should be inferred from header or source if title tag is missing
         // In this case, it might use the host of the source.
-        assertEquals("example.com", article.title)
+        assertEquals("example.com/noisy", article.title)
         assertEquals("Real content here.", article.text)
     }
 

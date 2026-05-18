@@ -4,6 +4,7 @@ import com.rsvpnano.converters.RsvpConversionError
 import com.rsvpnano.converters.RsvpConverter
 import com.rsvpnano.converters.RsvpEvent
 import com.rsvpnano.converters.ArticleFormatter
+import com.rsvpnano.converters.RsvpSupportedFileTypes
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.Test
@@ -62,7 +63,7 @@ class RsvpParityTest {
     }
 
     @Test
-    fun textToRsvpMatchesGoldenVector() {
+    fun textToRsvpMatchesReferenceVector() {
         val file = RsvpConverter.rsvpFile(
             title = "Basic Text Vector",
             source = "basic-text-input.txt",
@@ -76,7 +77,77 @@ class RsvpParityTest {
     }
 
     @Test
-    fun epubConversionIsStillExplicitlyUnsupported() {
+    fun htmlToRsvpMatchesReferenceVector() {
+        val file = RsvpConverter.rsvpFile(
+            title = "Basic HTML Vector",
+            source = "basic-html-input.html",
+            text = BASIC_HTML_INPUT,
+        )
+
+        assertEquals("Basic HTML Vector.rsvp", file.filename)
+        assertEquals(11, file.wordCount)
+        assertEquals(2, file.chapterCount)
+        assertEquals(BASIC_HTML_EXPECTED_RSVP, file.data.decodeToString())
+    }
+
+    @Test
+    fun supportedFileTypesMatchConverterCoverage() {
+        val expectedConvertible = setOf(".epub", ".txt", ".md", ".markdown", ".html", ".htm", ".xhtml")
+        expectedConvertible.forEach { extension ->
+            assertEquals(true, RsvpSupportedFileTypes.isConvertible("book$extension"), extension)
+        }
+        assertEquals(true, RsvpSupportedFileTypes.isUploadPassthrough("book.rsvp"))
+    }
+
+    @Test
+    fun bookFilePassesRsvpThroughUnchanged() {
+        val data = "@rsvp 1\n@title Ready\n@source ready.rsvp\n\nHello.\n".encodeToByteArray()
+        val file = RsvpConverter.bookFile(data, "ready.rsvp")
+
+        assertEquals("ready.rsvp", file.filename)
+        assertEquals("ready", file.title)
+        assertEquals(data.decodeToString(), file.data.decodeToString())
+    }
+
+    @Test
+    fun bookFileSupportsTextAndMarkdownExtensions() {
+        val cases = listOf(
+            Triple("book.txt", "Chapter Plain Text\n\nHello reader.", "Chapter Plain Text"),
+            Triple("book.md", "# Markdown Chapter\n\nHello reader.", "Markdown Chapter"),
+            Triple("book.markdown", "Chapter Markdown Extension\n\nHello reader.", "Chapter Markdown Extension"),
+        )
+
+        cases.forEach { (filename, input, chapter) ->
+            val converted = RsvpConverter.bookFile(input.encodeToByteArray(), filename)
+            val body = converted.data.decodeToString()
+            assertEquals(true, body.contains("@source $filename"), filename)
+            assertEquals(true, body.contains("@chapter $chapter"), filename)
+            assertEquals(true, body.contains("Hello reader."), filename)
+        }
+    }
+
+    @Test
+    fun bookFileSupportsHtmlExtensions() {
+        val cases = listOf(
+            "book.html" to "HTML Chapter",
+            "book.htm" to "HTM Chapter",
+            "book.xhtml" to "XHTML Chapter",
+        )
+
+        cases.forEach { (filename, chapter) ->
+            val converted = RsvpConverter.bookFile(
+                "<html><body><h1>$chapter</h1><p>Hello reader.</p></body></html>".encodeToByteArray(),
+                filename,
+            )
+            val body = converted.data.decodeToString()
+            assertEquals(true, body.contains("@source $filename"), filename)
+            assertEquals(true, body.contains("@chapter $chapter"), filename)
+            assertEquals(true, body.contains("Hello reader."), filename)
+        }
+    }
+
+    @Test
+    fun invalidEpubFailsWithConversionError() {
         assertFailsWith<RsvpConversionError> {
             RsvpConverter.bookFile(byteArrayOf(), "sample.epub")
         }
@@ -100,7 +171,7 @@ class RsvpParityTest {
     }
 
     private companion object {
-        // Mirrors docs/test-vectors/basic-text-input.txt. Keep commonTest free of JVM-only file APIs.
+        // Mirrors testdata/conversion/basic-text-input.txt. Keep commonTest free of JVM-only file APIs.
         private val BASIC_TEXT_INPUT = """
             Chapter 1
 
@@ -110,7 +181,7 @@ class RsvpParityTest {
             @directive-looking text stays readable.
         """.trimIndent()
 
-        // Mirrors docs/test-vectors/basic-text-expected.rsvp.
+        // Mirrors testdata/conversion/basic-text-expected.rsvp.
         private val BASIC_TEXT_EXPECTED_RSVP = """
             @rsvp 1
             @title Basic Text Vector
@@ -123,6 +194,49 @@ class RsvpParityTest {
 
             @para
             @@directive-looking text stays readable.
+        """.trimIndent() + "\n"
+
+        // Mirrors testdata/conversion/basic-html-input.html. Keep commonTest free of JVM-only file APIs.
+        private val BASIC_HTML_INPUT = """
+            <!doctype html>
+            <html>
+            <head>
+              <title>Ignored Browser Title</title>
+              <style>.hidden { display: none; }</style>
+            </head>
+            <body>
+              <nav>Ignore navigation</nav>
+              <article>
+                <h1>Chapter One</h1>
+                <p>Hello <span>reader</span> &amp; friend.</p>
+                <p><span>Inline</span> <span>punctuation</span><span>!</span></p>
+                <h2>Chapter Two</h2>
+                <p>@directive-looking text stays readable.</p>
+              </article>
+              <footer>Footer note.</footer>
+            </body>
+            </html>
+        """.trimIndent()
+
+        // Mirrors testdata/conversion/basic-html-expected.rsvp.
+        private val BASIC_HTML_EXPECTED_RSVP = """
+            @rsvp 1
+            @title Basic HTML Vector
+            @source basic-html-input.html
+
+            @chapter Chapter One
+            Hello reader & friend.
+
+            @para
+            Inline punctuation !
+
+            @chapter Chapter Two
+
+            @para
+            @@directive-looking text stays readable.
+
+            @para
+            Footer note.
         """.trimIndent() + "\n"
     }
 }

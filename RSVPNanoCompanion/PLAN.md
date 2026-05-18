@@ -15,7 +15,8 @@ Move the companion apps to a shared Kotlin Multiplatform core while keeping nati
 - [x] Shared models are the source of truth for device/book/settings/draft/RSS data.
 - [x] Shared Ktor API client handles RSVP Nano HTTP calls.
 - [x] Shared RSVP text/file conversion owns the main conversion path.
-- [x] Shared EPUB conversion exists through platform ZIP adapters.
+- [x] Shared EPUB parsing/writing matches the Python website converter output.
+- [x] iOS EPUB ZIP-entry reading is implemented through the shared ZIP parser and platform raw-deflate inflater.
 - [x] Shared article formatting/fetching exists.
 - [x] Shared pending-upload persistence exists with platform implementations.
 - [x] Shared RSS feed persistence exists.
@@ -104,12 +105,22 @@ These reduce the chance of app divergence and regression.
 
 The goal is confidence that Kotlin output matches the legacy behavior and remains stable.
 
+- [x] Document the shared conversion contract in `docs/conversion-spec.md`.
+- [x] Extract web converter core from UI code for CLI/parity reuse.
+- [x] Remove redundant standalone EPUB-only Python converter in favor of the documented SD-card converter.
 - [x] Shared mocked API tests cover endpoint paths, query parameters, upload/delete contract, and response decoding.
 - [x] Shared article fetch tests cover URL validation, fetch size guards, and HTML-to-readable formatting.
 - [x] Android/JVM parity test verifies existing `.rsvp` demo pass-through byte-for-byte.
-- [x] Add EPUB-to-RSVP golden vectors (verified via real `sample.epub` in Android tests).
-- [x] Add text-to-RSVP golden vectors.
+- [x] Add EPUB-to-RSVP reference cases (verified via real `sample.epub` in Android tests).
+- [ ] Add iOS EPUB parity coverage in CI/macOS to validate the native zlib inflater.
+- [x] Add text-to-RSVP reference cases.
 - [x] Add HTML/article formatting fixtures for common web pages (verified in `ArticleFormatterParityTest.kt`).
+- [x] Add cross-runtime text and HTML parity checks for Kotlin, Python, and web converters.
+- [ ] Low priority: add Markdown-aware conversion instead of treating `.md` / `.markdown` exactly like plain text:
+  - [ ] Headings become chapters.
+  - [ ] Emphasis/link/list/blockquote syntax is normalized into readable text.
+  - [ ] Code fences and tables have an explicit deterministic fallback.
+  - [ ] Kotlin, Python, and web converters share a Markdown reference case.
 - [x] Add tests for shared settings update helpers.
 - [x] Add tests for shared import preparation edge cases:
   - [x] Empty titles.
@@ -118,7 +129,7 @@ The goal is confidence that Kotlin output matches the legacy behavior and remain
   - [x] Source URL handling.
 - [x] Add tests for pending upload sync behavior after partial failures.
 - [x] Add tests for RSS merge/de-duplication behavior.
-- [x] Store parity fixtures in a deterministic repo path (programmatic or in `docs/test-vectors`).
+- [x] Store parity reference cases in `testdata/conversion`.
 - [x] Have CI upload parity diffs/artifacts when tests fail (configured in `.github/workflows/ci-android.yml` and `ci-ios.yml`).
 
 ## Priority 4: Platform UX And Polish
