@@ -16,18 +16,19 @@ import com.rsvpnano.models.PendingUpload
  */
 class NanoCompanionController(
     private val facade: RsvpSharedFacade,
+    private val draftService: PendingDraftService,
     private val deviceSyncService: NanoDeviceSyncService,
     private val client: NanoClient,
 ) {
     suspend fun refreshLocal(): CompanionLocalSnapshot {
         return CompanionLocalSnapshot(
-            drafts = facade.loadDrafts(),
+            drafts = draftService.loadDrafts(),
             rssFeeds = facade.loadRssFeeds(),
         )
     }
 
     suspend fun refreshDrafts(): CompanionDraftsSnapshot {
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
     suspend fun connect(baseUrl: String, localRssFeeds: List<String>): CompanionConnectSnapshot {
@@ -39,7 +40,7 @@ class NanoCompanionController(
             device = device,
             rssFeeds = mergedFeeds,
             syncedRssFeeds = syncedFeeds,
-            drafts = facade.loadDrafts(),
+            drafts = draftService.loadDrafts(),
         )
     }
 
@@ -55,12 +56,12 @@ class NanoCompanionController(
             wifiSettings = wifiSettings,
             rssFeeds = mergedFeeds,
             syncedRssFeeds = facade.mergeRssFeeds(localFeeds = emptyList(), deviceFeeds = deviceFeeds),
-            drafts = facade.loadDrafts(),
+            drafts = draftService.loadDrafts(),
         )
     }
 
     suspend fun syncPendingUploads(baseUrl: String, items: List<PendingUpload>): CompanionPendingSyncSnapshot {
-        val remaining = facade.syncPendingUploads(client = client, baseUrl = baseUrl, items = items)
+        val remaining = draftService.syncPendingUploads(client = client, baseUrl = baseUrl, items = items)
         return CompanionPendingSyncSnapshot(
             drafts = remaining,
             books = deviceSyncService.refreshBooks(baseUrl),
@@ -69,43 +70,43 @@ class NanoCompanionController(
     }
 
     suspend fun saveDraft(item: PendingUpload): CompanionDraftsSnapshot {
-        facade.saveDraft(item)
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        draftService.saveDraft(item)
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
     suspend fun updateDraft(item: PendingUpload, title: String, body: String): CompanionDraftsSnapshot {
-        facade.updateDraft(item, title, body)
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        draftService.updateDraft(item, title, body)
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
     suspend fun deleteDraft(item: PendingUpload): CompanionDraftsSnapshot {
-        facade.deleteDraft(item)
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        draftService.deleteDraft(item)
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
     suspend fun deleteDrafts(ids: List<String>): CompanionDraftsSnapshot {
-        facade.deleteDrafts(ids)
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        draftService.deleteDrafts(ids)
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
     suspend fun fetchArticle(item: PendingUpload): CompanionArticleFetchSnapshot {
-        val article = facade.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
-        facade.updateDraft(item, article.title, article.text)
+        val article = draftService.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
+        draftService.updateDraft(item, article.title, article.text)
         return CompanionArticleFetchSnapshot(
             article = article,
-            drafts = facade.loadDrafts(),
+            drafts = draftService.loadDrafts(),
         )
     }
 
     suspend fun fetchArticles(items: List<PendingUpload>): CompanionDraftsSnapshot {
         items.forEach { item ->
-            val article = facade.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
-            facade.updateDraft(item, article.title, article.text)
+            val article = draftService.fetchArticle(title = item.title, source = item.sourceUrl.orEmpty())
+            draftService.updateDraft(item, article.title, article.text)
         }
-        return CompanionDraftsSnapshot(drafts = facade.loadDrafts())
+        return CompanionDraftsSnapshot(drafts = draftService.loadDrafts())
     }
 
-    fun needsArticleFetch(item: PendingUpload): Boolean = facade.needsArticleFetch(item)
+    fun needsArticleFetch(item: PendingUpload): Boolean = draftService.needsArticleFetch(item)
 
     suspend fun saveRssFeeds(
         baseUrl: String,

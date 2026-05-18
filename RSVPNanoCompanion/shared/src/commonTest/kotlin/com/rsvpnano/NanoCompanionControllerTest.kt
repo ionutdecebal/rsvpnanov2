@@ -3,6 +3,7 @@ package com.rsvpnano
 import com.rsvpnano.api.NanoClient
 import com.rsvpnano.app.NanoCompanionController
 import com.rsvpnano.app.NanoDeviceSyncService
+import com.rsvpnano.app.PendingDraftService
 import com.rsvpnano.app.RsvpSharedFacade
 import com.rsvpnano.converters.RsvpBookFile
 import com.rsvpnano.models.NanoBook
@@ -13,6 +14,7 @@ import com.rsvpnano.models.NanoUploadResponse
 import com.rsvpnano.models.NanoWifiSettings
 import com.rsvpnano.models.PendingUpload
 import com.rsvpnano.persistence.PendingUploadStore
+import com.rsvpnano.persistence.PendingUploadRepository
 import com.rsvpnano.persistence.RssFeedStore
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -210,6 +212,9 @@ class NanoCompanionControllerTest {
         )
         return NanoCompanionController(
             facade = facade,
+            draftService = PendingDraftService(
+                repository = PendingUploadRepository(pendingStore),
+            ),
             deviceSyncService = NanoDeviceSyncService(client),
             client = client,
         )

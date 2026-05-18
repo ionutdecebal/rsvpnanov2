@@ -2,7 +2,7 @@ package com.rsvpnano.app
 
 import com.rsvpnano.api.ArticleFetchClient
 import com.rsvpnano.api.NanoClient
-import com.rsvpnano.app.NanoDeviceSyncService
+import com.rsvpnano.persistence.PendingUploadArticleService
 import com.rsvpnano.persistence.PendingUploadRepository
 import com.rsvpnano.persistence.PendingUploadJsonStore
 import com.rsvpnano.persistence.PendingUploadStorage
@@ -36,6 +36,18 @@ data class RsvpSharedDependencies(
         return PendingUploadRepository(PendingUploadJsonStore(pendingUploadStorage))
     }
 
+    fun createPendingDraftService(): PendingDraftService {
+        val articleService = PendingUploadArticleService()
+        return PendingDraftService(
+            repository = PendingUploadRepository(
+                store = PendingUploadJsonStore(pendingUploadStorage),
+                articleService = articleService,
+            ),
+            articleService = articleService,
+            articleFetchClient = articleFetchClient,
+        )
+    }
+
     fun createDeviceSyncService(): NanoDeviceSyncService {
         val client = nanoClient ?: throw IllegalStateException("NanoClient not provided to dependencies")
         return NanoDeviceSyncService(client)
@@ -45,10 +57,14 @@ data class RsvpSharedDependencies(
         return NanoDeviceSyncService(client)
     }
 
-    fun createCompanionController(facade: RsvpSharedFacade = createFacade()): NanoCompanionController {
+    fun createCompanionController(
+        facade: RsvpSharedFacade = createFacade(),
+        draftService: PendingDraftService = createPendingDraftService(),
+    ): NanoCompanionController {
         val client = nanoClient ?: throw IllegalStateException("NanoClient not provided to dependencies")
         return NanoCompanionController(
             facade = facade,
+            draftService = draftService,
             deviceSyncService = NanoDeviceSyncService(client),
             client = client,
         )

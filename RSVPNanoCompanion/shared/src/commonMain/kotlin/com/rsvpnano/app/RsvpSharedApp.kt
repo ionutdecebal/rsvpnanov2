@@ -12,9 +12,15 @@ class RsvpSharedApp internal constructor(
     private val dependencies: RsvpSharedDependencies,
     val facade: RsvpSharedFacade = dependencies.createFacade(),
     val pendingUploadRepository: PendingUploadRepository = dependencies.createPendingUploadRepository(),
+    val pendingDraftService: PendingDraftService = dependencies.createPendingDraftService(),
 ) {
     val deviceSyncService: NanoDeviceSyncService by lazy { dependencies.createDeviceSyncService() }
-    val companionController: NanoCompanionController by lazy { dependencies.createCompanionController(facade) }
+    val companionController: NanoCompanionController by lazy {
+        dependencies.createCompanionController(
+            facade = facade,
+            draftService = pendingDraftService,
+        )
+    }
     val nanoClient: NanoClient? get() = dependencies.nanoClient
 
     fun createDeviceSyncService(client: NanoClient): NanoDeviceSyncService {
