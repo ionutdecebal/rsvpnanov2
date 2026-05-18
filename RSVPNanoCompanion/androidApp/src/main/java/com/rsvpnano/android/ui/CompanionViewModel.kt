@@ -371,10 +371,9 @@ class CompanionViewModel(
             val title = book.displayTitle
             setStatus("Deleting $title...")
             runCatching {
-                deviceSyncService.deleteBook(state.address, book.id)
-                deviceSyncService.refreshBooks(state.address)
-            }.onSuccess { books ->
-                updateState { it.copy(books = books, status = "Deleted $title.") }
+                companionController.deleteBooks(state.address, listOf(book.id))
+            }.onSuccess { snapshot ->
+                updateState { it.copy(books = snapshot.books, status = "Deleted $title.") }
             }.onFailure { error ->
                 setStatus(error.message ?: "Book delete failed.")
             }
@@ -391,15 +390,13 @@ class CompanionViewModel(
             setStatus("Uploading $displayName...")
             runCatching {
                 val file = RsvpConverter.bookFile(data = data, filename = displayName)
-                deviceSyncService.uploadBook(
+                companionController.uploadBook(
                     baseUrl = state.address,
-                    filename = file.filename,
-                    data = file.data,
+                    file = file,
                     category = "book",
                 )
-                deviceSyncService.refreshBooks(state.address)
-            }.onSuccess { books ->
-                updateState { it.copy(books = books, status = "Uploaded $displayName.") }
+            }.onSuccess { snapshot ->
+                updateState { it.copy(books = snapshot.books, status = "Uploaded $displayName.") }
             }.onFailure { error ->
                 setStatus(error.message ?: "File upload failed.")
             }

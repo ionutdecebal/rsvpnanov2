@@ -4,6 +4,7 @@ import com.rsvpnano.api.NanoClient
 import com.rsvpnano.app.NanoCompanionController
 import com.rsvpnano.app.NanoDeviceSyncService
 import com.rsvpnano.app.RsvpSharedFacade
+import com.rsvpnano.converters.RsvpBookFile
 import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoInfo
 import com.rsvpnano.models.NanoRssFeeds
@@ -91,6 +92,47 @@ class NanoCompanionControllerTest {
         assertEquals(snapshot.rssFeeds, rssStore.items)
     }
 
+    @Test
+    fun uploadBookUploadsFileAndRefreshesBooks() = runBlocking {
+        val client = RecordingNanoClient()
+        val controller = controller(InMemoryPendingStore(), InMemoryRssStore(), client)
+
+        val snapshot = controller.uploadBook(
+            baseUrl = "http://device.local",
+            file = RsvpBookFile(
+                filename = "Manual.rsvp",
+                data = byteArrayOf(1, 2, 3),
+                title = "Manual",
+                wordCount = 1,
+                chapterCount = 1,
+            ),
+            category = "book",
+        )
+
+        assertEquals("Manual.rsvp", client.uploadedFilename)
+        assertEquals("book", client.uploadedCategory)
+        assertEquals(listOf(NanoBook(id = "Manual.rsvp", title = "Manual")), snapshot.books)
+    }
+
+    @Test
+    fun deleteBooksDeletesEachBookAndRefreshesBooks() = runBlocking {
+        val client = RecordingNanoClient(
+            initialBooks = listOf(
+                NanoBook(id = "One.rsvp", title = "One"),
+                NanoBook(id = "Two.rsvp", title = "Two"),
+            )
+        )
+        val controller = controller(InMemoryPendingStore(), InMemoryRssStore(), client)
+
+        val snapshot = controller.deleteBooks(
+            baseUrl = "http://device.local",
+            bookIds = listOf("One.rsvp", "Two.rsvp"),
+        )
+
+        assertEquals(listOf("One.rsvp", "Two.rsvp"), client.deletedFilenames)
+        assertEquals(emptyList(), snapshot.books)
+    }
+
     private fun controller(
         pendingStore: PendingUploadStore,
         rssStore: RssFeedStore,
@@ -117,14 +159,17 @@ class NanoCompanionControllerTest {
 
     private class RecordingNanoClient(
         private val deviceFeeds: List<String> = emptyList(),
+        initialBooks: List<NanoBook> = emptyList(),
     ) : NanoClient {
+        private var books: List<NanoBook> = initialBooks
         var uploadedFilename: String? = null
+        var uploadedCategory: String? = null
         var savedFeeds: List<String>? = null
+        val deletedFilenames = mutableListOf<String>()
 
         override suspend fun fetchInfo(baseUrl: String): NanoInfo = NanoInfo(name = "Nano")
 
-        override suspend fun listBooks(baseUrl: String): List<NanoBook> =
-            uploadedFilename?.let { listOf(NanoBook(id = it, title = "Example")) }.orEmpty()
+        override suspend fun listBooks(baseUrl: String): List<NanoBook> = books
 
         override suspend fun fetchSettings(baseUrl: String): NanoSettings = sampleSettings()
 
@@ -154,11 +199,16 @@ class NanoCompanionControllerTest {
             category: String?,
         ): NanoUploadResponse {
             uploadedFilename = name
+            uploadedCategory = category
+            books = listOf(NanoBook(id = name, title = name.substringBeforeLast('.')))
             return NanoUploadResponse(ok = true, path = "/books/$name")
         }
 
-        override suspend fun deleteBook(baseUrl: String, name: String): NanoUploadResponse =
-            NanoUploadResponse(ok = true)
+        override suspend fun deleteBook(baseUrl: String, name: String): NanoUploadResponse {
+            deletedFilenames += name
+            books = books.filterNot { it.id == name }
+            return NanoUploadResponse(ok = true)
+        }
     }
 
     private class InMemoryPendingStore(var items: List<PendingUpload> = emptyList()) : PendingUploadStore {

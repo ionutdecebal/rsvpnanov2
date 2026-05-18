@@ -255,10 +255,11 @@ final class NanoViewModel: ObservableObject {
         guard !booksToDelete.isEmpty else { return }
         Task {
             await run(booksToDelete.count == 1 ? "Deleting \(booksToDelete[0].displayTitle)" : "Deleting books") { [self] in
-                for book in booksToDelete {
-                    _ = try await deviceSyncService.deleteBook(baseUrl: self.address, filename: book.id)
-                }
-                self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
+                let snapshot = try await companionController.deleteBooks(
+                    baseUrl: self.address,
+                    bookIds: booksToDelete.map(\.id)
+                )
+                self.books = snapshot.books
                 self.status = booksToDelete.count == 1 ? "Deleted \(booksToDelete[0].displayTitle)." : "Deleted books."
             }
         }
@@ -383,8 +384,8 @@ final class NanoViewModel: ObservableObject {
     }
 
     private func uploadConverted(_ file: shared.RsvpBookFile) async throws {
-        _ = try await deviceSyncService.uploadBook(baseUrl: self.address, filename: file.filename, data: file.data, category: "book")
-        self.books = try await deviceSyncService.refreshBooks(baseUrl: self.address)
+        let snapshot = try await companionController.uploadBook(baseUrl: self.address, file: file, category: "book")
+        self.books = snapshot.books
         self.status = uploadStatus(for: file)
     }
 

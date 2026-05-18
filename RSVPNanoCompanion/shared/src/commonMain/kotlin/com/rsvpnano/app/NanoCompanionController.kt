@@ -1,6 +1,7 @@
 package com.rsvpnano.app
 
 import com.rsvpnano.api.NanoClient
+import com.rsvpnano.converters.RsvpBookFile
 import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoSettings
 import com.rsvpnano.models.NanoWifiSettings
@@ -94,6 +95,23 @@ class NanoCompanionController(
         )
     }
 
+    suspend fun uploadBook(baseUrl: String, file: RsvpBookFile, category: String): CompanionBooksSnapshot {
+        deviceSyncService.uploadBook(
+            baseUrl = baseUrl,
+            filename = file.filename,
+            data = file.data,
+            category = category,
+        )
+        return CompanionBooksSnapshot(books = deviceSyncService.refreshBooks(baseUrl))
+    }
+
+    suspend fun deleteBooks(baseUrl: String, bookIds: List<String>): CompanionBooksSnapshot {
+        bookIds.forEach { bookId ->
+            deviceSyncService.deleteBook(baseUrl, bookId)
+        }
+        return CompanionBooksSnapshot(books = deviceSyncService.refreshBooks(baseUrl))
+    }
+
     private suspend fun saveMergedRssFeeds(localFeeds: List<String>, deviceFeeds: List<String>): List<String> {
         return facade.saveRssFeeds(
             facade.mergeRssFeeds(
@@ -134,4 +152,8 @@ data class CompanionRssSnapshot(
     val rssFeeds: List<String>,
     val syncedRssFeeds: List<String>,
     val didSyncDevice: Boolean,
+)
+
+data class CompanionBooksSnapshot(
+    val books: List<NanoBook>,
 )
