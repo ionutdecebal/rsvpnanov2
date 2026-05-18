@@ -11,14 +11,10 @@
 		0A1000020000000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000020000000000000001 /* ContentView.swift */; };
 		0A1000040000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000040000000000000001 /* Models.swift */; };
 		0A1000050000000000000001 /* BookDocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000050000000000000001 /* BookDocumentPicker.swift */; };
-		0A1000060000000000000001 /* RsvpConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000080000000000000001 /* RsvpConverter.swift */; };
 		0A1000070000000000000001 /* TextImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000090000000000000001 /* TextImportView.swift */; };
 		0A1000080000000000000001 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000110000000000000001 /* ShareViewController.swift */; };
-		0A1000090000000000000001 /* RsvpConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000080000000000000001 /* RsvpConverter.swift */; };
 		0A1000110000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000040000000000000001 /* Models.swift */; };
 		0A1000120000000000000001 /* RSVPNanoShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 0A2000100000000000000001 /* RSVPNanoShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		0A1000130000000000000001 /* EpubConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000130000000000000001 /* EpubConverter.swift */; };
-		0A1000140000000000000001 /* EpubConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000130000000000000001 /* EpubConverter.swift */; };
 		0A1000190000000000000001 /* NanoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000190000000000000001 /* NanoViewModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -53,12 +49,10 @@
 		0A2000050000000000000001 /* BookDocumentPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDocumentPicker.swift; sourceTree = "<group>"; };
 		0A2000060000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0A2000070000000000000001 /* RSVPNanoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RSVPNanoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		0A2000080000000000000001 /* RsvpConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RsvpConverter.swift; sourceTree = "<group>"; };
 		0A2000090000000000000001 /* TextImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextImportView.swift; sourceTree = "<group>"; };
 		0A2000100000000000000001 /* RSVPNanoShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RSVPNanoShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A2000110000000000000001 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		0A2000120000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		0A2000130000000000000001 /* EpubConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpubConverter.swift; sourceTree = "<group>"; };
 		0A2000160000000000000001 /* RSVPNanoCompanion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RSVPNanoCompanion.entitlements; sourceTree = "<group>"; };
 		0A2000170000000000000001 /* RSVPNanoShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RSVPNanoShareExtension.entitlements; sourceTree = "<group>"; };
 		0A2000190000000000000001 /* NanoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NanoViewModel.swift; sourceTree = "<group>"; };
@@ -99,8 +93,6 @@
 				0A2000190000000000000001 /* NanoViewModel.swift */,
 				0A2000040000000000000001 /* Models.swift */,
 				0A2000050000000000000001 /* BookDocumentPicker.swift */,
-				0A2000080000000000000001 /* RsvpConverter.swift */,
-				0A2000130000000000000001 /* EpubConverter.swift */,
 				0A2000090000000000000001 /* TextImportView.swift */,
 				0A2000160000000000000001 /* RSVPNanoCompanion.entitlements */,
 				0A2000060000000000000001 /* Info.plist */,
@@ -230,8 +222,6 @@
 				0A1000190000000000000001 /* NanoViewModel.swift in Sources */,
 				0A1000040000000000000001 /* Models.swift in Sources */,
 				0A1000050000000000000001 /* BookDocumentPicker.swift in Sources */,
-				0A1000060000000000000001 /* RsvpConverter.swift in Sources */,
-				0A1000130000000000000001 /* EpubConverter.swift in Sources */,
 				0A1000070000000000000001 /* TextImportView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -241,8 +231,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A1000080000000000000001 /* ShareViewController.swift in Sources */,
-				0A1000090000000000000001 /* RsvpConverter.swift in Sources */,
-				0A1000140000000000000001 /* EpubConverter.swift in Sources */,
 				0A1000110000000000000001 /* Models.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

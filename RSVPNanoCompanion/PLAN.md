@@ -46,6 +46,23 @@ TL;DR - Move reusable business logic (parsers, converters, models, sync, API cli
   - Style both apps beyond the current shell: typography, spacing, color system, component states, empty/loading/error views, device connection flow, library management, saved article workflows, RSS management, and settings screens.
   - Polish platform-specific ergonomics for phone-sized layouts, accessibility, visual consistency, and final user-facing fit and finish before considering the apps complete.
 
+**Current Status and Remaining Work**
+- Shared is now the source of truth for the main business logic: models, converters, Ktor API client, persistence interfaces, RSS/draft/device workflow services, and the app-level controller are in `shared`.
+- The old shared facade pattern has been removed; platform adapters call the focused shared services/controller directly.
+- Android uses shared storage, shared device sync, upload/list/delete, settings, Wi-Fi, RSS, and saved-article workflows.
+- iOS uses shared converters/controller/wiring for app and share-extension flows, while keeping SwiftUI UI and Swift presentation models.
+- Device connection state is guarded through shared reachability checks before device mutations, so stale UI should clear when the Nano disconnects.
+- Highest remaining product gaps are iOS CI/macOS verification, manual device smoke testing on Android and iOS, broader converter parity vectors, and UI/UX styling.
+
+**Refactor Backlog**
+1. Remove stale Swift converter target references and any unused Swift converter files once shared converter usage is confirmed by iOS CI.
+2. Split `ContentView.swift` into focused SwiftUI views: connection, library, articles, RSS, settings, help, and article editor.
+3. Split `NanoViewModel.swift` by responsibility if Swift-side orchestration remains: connection/device state, settings/RSS, drafts/articles, and Swift/Kotlin conversion helpers.
+4. Keep shrinking platform ViewModels so they map shared snapshots to UI state only; business rules should stay in shared services/controllers.
+5. Update stale plan/documentation references that still describe already-completed ports as future work.
+6. Add EPUB-to-RSVP golden vectors and more article/converter fixtures to make the shared implementation safer to evolve.
+7. After CI proves the shared replacements, delete any remaining Swift business-logic files that are no longer compiled or needed.
+
 **Relevant files**
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/ContentView.swift) — main UI + `NanoViewModel` to adapt to shared `SyncManager`.
 - [RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift](RSVPNanoCompanion/ios/RSVPNanoCompanion/Models.swift) — source of DTOs to port.
