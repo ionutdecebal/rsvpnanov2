@@ -18,6 +18,7 @@ __pycache__/
 .vscode/ipch
 tools/*.epub
 tools/*.rsvp
+RSVPNanoCompanion/testdata/conversion/from-nano/
 *.rsvp.tmp
 *.rsvp.failed
 *.rsvp.converting

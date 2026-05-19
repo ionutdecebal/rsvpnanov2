@@ -52,6 +52,11 @@ class EpubParityAndroidTest {
             )
             assertEquals(
                 false,
+                chapters.any { it == "@chapter CHAPTER I" },
+                "Short body heading should not override the richer TOC chapter title in $name",
+            )
+            assertEquals(
+                false,
                 chapters.any { it.contains("7599939443149237915") },
                 "Chapter titles should not fall back to generated XHTML filenames in $name",
             )

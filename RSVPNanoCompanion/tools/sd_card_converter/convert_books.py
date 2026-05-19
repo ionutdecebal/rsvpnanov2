@@ -576,6 +576,7 @@ def epub_events_and_metadata(path: Path) -> tuple[str, str, list[tuple[str, str]
             if toc_title:
                 chapter_events = remove_first_chapter(chapter_events)
                 chapter_events = remove_first_chapter_matching(chapter_events, toc_title)
+                chapter_events = remove_first_chapter_prefix_of(chapter_events, toc_title)
                 chapter_events.insert(0, ("chapter", toc_title))
             elif toc_titles:
                 chapter_events = [(kind, value) for kind, value in chapter_events if kind != "chapter"]
@@ -600,6 +601,17 @@ def remove_first_chapter_matching(events: list[tuple[str, str]], title: str) -> 
     result = list(events)
     for index, (kind, value) in enumerate(result):
         if kind == "chapter" and clean_text(value).lower() == normalized:
+            del result[index]
+            break
+    return result
+
+
+def remove_first_chapter_prefix_of(events: list[tuple[str, str]], title: str) -> list[tuple[str, str]]:
+    normalized = clean_text(title).lower()
+    result = list(events)
+    for index, (kind, value) in enumerate(result):
+        chapter = clean_text(value).lower()
+        if kind == "chapter" and normalized.startswith(f"{chapter} "):
             del result[index]
             break
     return result

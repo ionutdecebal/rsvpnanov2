@@ -26,6 +26,7 @@ internal object EpubBookConverter {
             if (tocTitle != null) {
                 chapterEvents.removeFirstMatchingChapter()
                 chapterEvents.removeFirstChapterMatching(tocTitle)
+                chapterEvents.removeFirstChapterPrefixOf(tocTitle)
                 chapterEvents.add(0, RsvpEvent.Chapter(tocTitle))
             } else if (packageInfo.tocTitlesByPath.isNotEmpty()) {
                 chapterEvents.removeAll { it is RsvpEvent.Chapter }
@@ -267,6 +268,16 @@ internal object EpubBookConverter {
         val normalizedTitle = normalizedChapterTitle(title)
         val index = indexOfFirst { event ->
             event is RsvpEvent.Chapter && normalizedChapterTitle(event.title) == normalizedTitle
+        }
+        if (index >= 0) {
+            removeAt(index)
+        }
+    }
+
+    private fun MutableList<RsvpEvent>.removeFirstChapterPrefixOf(title: String) {
+        val normalizedTitle = normalizedChapterTitle(title)
+        val index = indexOfFirst { event ->
+            event is RsvpEvent.Chapter && normalizedTitle.startsWith(normalizedChapterTitle(event.title) + " ")
         }
         if (index >= 0) {
             removeAt(index)

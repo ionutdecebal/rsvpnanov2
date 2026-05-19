@@ -113,6 +113,8 @@ def run_python_epub_toc() -> None:
             raise AssertionError(f"Python EPUB TOC chapter II was not used for {input_name}")
         if sum(chapter.startswith("CHAPTER I JONATHAN HARKER") for chapter in chapters) != 1:
             raise AssertionError(f"Python EPUB duplicated chapter I for {input_name}")
+        if any(chapter == "CHAPTER I" for chapter in chapters):
+            raise AssertionError(f"Python EPUB kept short duplicate chapter I for {input_name}")
         if any("7599939443149237915" in chapter for chapter in chapters):
             raise AssertionError(f"Python EPUB used generated XHTML filename chapter for {input_name}")
         if any(chapter == "D R A C U L A" for chapter in chapters):

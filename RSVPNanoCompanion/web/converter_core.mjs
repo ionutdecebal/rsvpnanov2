@@ -280,6 +280,7 @@ async function epubEventsAndMetadata(file, mode, options) {
     if (tocTitle) {
       chapterEvents = removeFirstChapter(chapterEvents);
       chapterEvents = removeFirstChapterMatching(chapterEvents, tocTitle, mode);
+      chapterEvents = removeFirstChapterPrefixOf(chapterEvents, tocTitle, mode);
       chapterEvents.unshift(["chapter", tocTitle]);
     } else if (tocTitlesByPath.size > 0) {
       chapterEvents = chapterEvents.filter(([kind]) => kind !== "chapter");
@@ -518,6 +519,18 @@ function removeFirstChapterMatching(events, title, mode) {
   const index = events.findIndex(
     ([kind, value]) => kind === "chapter" && cleanText(value, mode).toLowerCase() === normalizedTitle,
   );
+  if (index < 0) {
+    return events;
+  }
+  return [...events.slice(0, index), ...events.slice(index + 1)];
+}
+
+function removeFirstChapterPrefixOf(events, title, mode) {
+  const normalizedTitle = cleanText(title, mode).toLowerCase();
+  const index = events.findIndex(([kind, value]) => {
+    const chapter = cleanText(value, mode).toLowerCase();
+    return kind === "chapter" && normalizedTitle.startsWith(`${chapter} `);
+  });
   if (index < 0) {
     return events;
   }
