@@ -1,4 +1,8 @@
 .pio
+.gradle
+.kotlin/
+build/
+**/build/
 .derivedData
 *.xcuserstate
 xcuserdata/
@@ -14,9 +18,11 @@ __pycache__/
 .vscode/ipch
 tools/*.epub
 tools/*.rsvp
+RSVPNanoCompanion/testdata/conversion/from-nano/
 *.rsvp.tmp
 *.rsvp.failed
 *.rsvp.converting
 web/firmware/*.bin
 .cache/
+.local/
 compile_commands.json
