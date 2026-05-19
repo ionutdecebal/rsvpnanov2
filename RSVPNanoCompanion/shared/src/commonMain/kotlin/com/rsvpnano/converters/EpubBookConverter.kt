@@ -11,7 +11,7 @@ internal object EpubBookConverter {
             ?.let(RsvpTextUtils::decodeText)
             ?: throw RsvpConversionError.unsupportedEpub
 
-        val packageInfo = parsePackage(packageXml, opfPath)
+        val packageInfo = parsePackage(packageXml, opfPath, normalizedEntries)
         val paths = packageInfo.spinePaths.ifEmpty { packageInfo.manifestContentPaths }
         if (paths.isEmpty()) {
             throw RsvpConversionError.unsupportedEpub
@@ -22,7 +22,12 @@ internal object EpubBookConverter {
             val chapterData = normalizedEntries[EpubUtils.normalizeZipPath(spinePath).lowercase()] ?: return@forEachIndexed
             val markup = RsvpTextUtils.decodeText(chapterData) ?: return@forEachIndexed
             val chapterEvents = RsvpTextUtils.htmlEvents(markup).toMutableList()
-            if (chapterEvents.none { it is RsvpEvent.Chapter }) {
+            val tocTitle = packageInfo.tocTitlesByPath[EpubUtils.normalizeZipPath(spinePath).lowercase()]
+            if (tocTitle != null) {
+                chapterEvents.removeFirstMatchingChapter()
+                chapterEvents.removeFirstChapterMatching(tocTitle)
+                chapterEvents.add(0, RsvpEvent.Chapter(tocTitle))
+            } else if (packageInfo.tocTitlesByPath.isEmpty() && chapterEvents.none { it is RsvpEvent.Chapter }) {
                 chapterEvents.add(0, RsvpEvent.Chapter(EpubUtils.fallbackChapterTitle(spinePath, index + 1)))
             }
             if (chapterEvents.any { it is RsvpEvent.Text }) {
@@ -48,10 +53,12 @@ internal object EpubBookConverter {
             .firstOrNull { it.isNotBlank() }
     }
 
-    private fun parsePackage(xml: String, opfPath: String): EpubPackage {
+    private fun parsePackage(xml: String, opfPath: String, entries: Map<String, ByteArray>): EpubPackage {
         val manifest = linkedMapOf<String, EpubManifestItem>()
         val manifestContentPaths = mutableListOf<String>()
         val spinePaths = mutableListOf<String>()
+        val navPaths = mutableListOf<String>()
+        val ncxPaths = mutableListOf<String>()
 
         tagMatches(xml, "item").forEach { match ->
             val attrs = attributes(match.groupValues[1])
@@ -65,6 +72,12 @@ internal object EpubBookConverter {
             manifest[id] = item
             if (isContentDocument(path, mediaType)) {
                 manifestContentPaths += path
+            }
+            if (mediaType.equals("application/x-dtbncx+xml", ignoreCase = true)) {
+                ncxPaths += path
+            }
+            if (attrs["properties"].orEmpty().split(Regex("\\s+")).any { it == "nav" }) {
+                navPaths += path
             }
         }
 
@@ -81,7 +94,88 @@ internal object EpubBookConverter {
             author = textContentByTag(metadataXml(xml), "creator"),
             spinePaths = spinePaths,
             manifestContentPaths = manifestContentPaths,
+            tocTitlesByPath = tocTitlesByPath(
+                entries = entries,
+                opfPath = opfPath,
+                navPaths = navPaths,
+                ncxPaths = ncxPaths,
+            ),
         )
+    }
+
+    private fun tocTitlesByPath(
+        entries: Map<String, ByteArray>,
+        opfPath: String,
+        navPaths: List<String>,
+        ncxPaths: List<String>,
+    ): Map<String, String> {
+        ncxPaths.firstNotNullOfOrNull { path ->
+            entries[EpubUtils.normalizeZipPath(path).lowercase()]
+                ?.let(RsvpTextUtils::decodeText)
+                ?.let { ncxTocTitles(it, path) }
+                ?.takeIf { it.isNotEmpty() }
+        }?.let { return it }
+
+        navPaths.firstNotNullOfOrNull { path ->
+            entries[EpubUtils.normalizeZipPath(path).lowercase()]
+                ?.let(RsvpTextUtils::decodeText)
+                ?.let { htmlNavTocTitles(it, path) }
+                ?.takeIf { it.isNotEmpty() }
+        }?.let { return it }
+
+        return emptyMap()
+    }
+
+    private fun ncxTocTitles(xml: String, tocPath: String): Map<String, String> {
+        return Regex(
+            "<(?:[A-Za-z_][\\w.-]*:)?navPoint\\b[^>]*>(.*?)</(?:[A-Za-z_][\\w.-]*:)?navPoint>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+        ).findAll(xml).mapNotNull { match ->
+            val block = match.groupValues[1]
+            val label = textContentByTag(block, "text").takeIf(::isContentTocTitle) ?: return@mapNotNull null
+            val contentAttrs = Regex(
+                "<(?:[A-Za-z_][\\w.-]*:)?content\\b([^>]*)>",
+                RegexOption.IGNORE_CASE,
+            ).find(block)?.groupValues?.getOrNull(1).orEmpty()
+            val src = attributes(contentAttrs)["src"].orEmpty()
+            tocPathKey(tocPath, src) to label
+        }.toMap()
+    }
+
+    private fun htmlNavTocTitles(markup: String, tocPath: String): Map<String, String> {
+        val navBlock = Regex(
+            "<(?:[A-Za-z_][\\w.-]*:)?nav\\b[^>]*?(?:epub:type|type)\\s*=\\s*([\"'])toc\\1[^>]*>(.*?)</(?:[A-Za-z_][\\w.-]*:)?nav>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+        ).find(markup)?.groupValues?.getOrNull(2) ?: markup
+
+        return Regex(
+            "<(?:[A-Za-z_][\\w.-]*:)?a\\b([^>]*)>(.*?)</(?:[A-Za-z_][\\w.-]*:)?a>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+        ).findAll(navBlock).mapNotNull { match ->
+            val href = attributes(match.groupValues[1])["href"].orEmpty()
+            val label = RsvpTextUtils.cleanedLine(
+                decodeXmlEntities(match.groupValues[2].replace(Regex("<[^>]+>"), " "))
+            ).takeIf(::isContentTocTitle) ?: return@mapNotNull null
+            tocPathKey(tocPath, href) to label
+        }.toMap()
+    }
+
+    private fun tocPathKey(tocPath: String, href: String): String {
+        val withoutAnchor = href.substringBefore('#').substringBefore('?')
+        return EpubUtils.normalizeZipPath(EpubUtils.zipJoin(tocPath, withoutAnchor)).lowercase()
+    }
+
+    private fun isContentTocTitle(value: String): Boolean {
+        val cleaned = RsvpTextUtils.cleanedLine(value)
+        val lowered = cleaned.lowercase()
+        val compact = cleaned.filterNot(Char::isWhitespace).lowercase()
+        return cleaned.isNotEmpty() &&
+            lowered != "contents" &&
+            lowered != "cover" &&
+            lowered != "title page" &&
+            lowered != "dracula" &&
+            compact != "dracula" &&
+            cleaned.any(Char::isLetterOrDigit)
     }
 
     private fun tagMatches(xml: String, tag: String): Sequence<MatchResult> {
@@ -146,5 +240,27 @@ internal object EpubBookConverter {
         val author: String,
         val spinePaths: List<String>,
         val manifestContentPaths: List<String>,
+        val tocTitlesByPath: Map<String, String>,
     )
+
+    private fun MutableList<RsvpEvent>.removeFirstMatchingChapter() {
+        val index = indexOfFirst { it is RsvpEvent.Chapter }
+        if (index >= 0) {
+            removeAt(index)
+        }
+    }
+
+    private fun MutableList<RsvpEvent>.removeFirstChapterMatching(title: String) {
+        val normalizedTitle = normalizedChapterTitle(title)
+        val index = indexOfFirst { event ->
+            event is RsvpEvent.Chapter && normalizedChapterTitle(event.title) == normalizedTitle
+        }
+        if (index >= 0) {
+            removeAt(index)
+        }
+    }
+
+    private fun normalizedChapterTitle(value: String): String {
+        return RsvpTextUtils.cleanedLine(value).lowercase()
+    }
 }

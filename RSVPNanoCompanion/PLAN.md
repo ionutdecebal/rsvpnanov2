@@ -15,7 +15,9 @@ Move the companion apps to a shared Kotlin Multiplatform core while keeping nati
 - [x] Shared models are the source of truth for device/book/settings/draft/RSS data.
 - [x] Shared Ktor API client handles RSVP Nano HTTP calls.
 - [x] Shared RSVP text/file conversion owns the main conversion path.
-- [x] Shared EPUB parsing/writing matches the Python website converter output.
+- [x] Shared EPUB parsing/writing matches the Python and website converter output.
+  - [x] EPUB chapter markers prefer NCX / EPUB3 nav table-of-contents titles when available.
+        Regression cases - `./testdata/conversion/Dracula-epub3.epub`, `./testdata/conversion/Dracula-epub.epub`
 - [x] iOS EPUB ZIP-entry reading is implemented through the shared ZIP parser and platform raw-deflate inflater.
 - [x] Shared article formatting/fetching exists.
 - [x] Shared pending-upload persistence exists with platform implementations.

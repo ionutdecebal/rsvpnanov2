@@ -27,6 +27,37 @@ class EpubParityAndroidTest {
         )
     }
 
+    @Test
+    fun draculaEpubsUseTocChapterTitles() {
+        listOf("Dracula-epub.epub", "Dracula-epub3.epub").forEach { name ->
+            val epub = testVectorFile(name)
+            val converted = RsvpConverter.bookFile(epub.readBytes(), epub.name)
+            val chapters = converted.data.decodeToString()
+                .lineSequence()
+                .filter { it.startsWith("@chapter ") }
+                .toList()
+
+            assertTrue(
+                chapters.any { it.startsWith("@chapter CHAPTER I JONATHAN HARKER") },
+                "Chapter I should come from the EPUB TOC in $name",
+            )
+            assertTrue(
+                chapters.any { it.startsWith("@chapter CHAPTER II JONATHAN HARKER") },
+                "Chapter II should come from the EPUB TOC in $name",
+            )
+            assertEquals(
+                1,
+                chapters.count { it.startsWith("@chapter CHAPTER I JONATHAN HARKER") },
+                "Chapter I should not be duplicated in $name",
+            )
+            assertEquals(
+                false,
+                chapters.any { it.contains("7599939443149237915") },
+                "Chapter titles should not fall back to generated XHTML filenames in $name",
+            )
+        }
+    }
+
     private fun testVectorFile(name: String): File {
         val candidates = listOf(
             File("RSVPNanoCompanion/testdata/conversion", name),

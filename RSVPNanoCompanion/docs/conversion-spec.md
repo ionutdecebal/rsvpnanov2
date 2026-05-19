@@ -99,6 +99,7 @@ The firmware can read or convert a narrower set directly:
 - Use OPF metadata creator as author when present.
 - Build the manifest from OPF `item` entries.
 - Prefer OPF spine reading order.
+- Prefer NCX / EPUB3 navigation table-of-contents labels for chapter titles when available.
 - If the spine is missing or empty, a converter may fall back to manifest content documents.
 - Content documents are selected by media type (`application/xhtml+xml`, `text/html`) or by
   `.xhtml`, `.html`, or `.htm` extension.
