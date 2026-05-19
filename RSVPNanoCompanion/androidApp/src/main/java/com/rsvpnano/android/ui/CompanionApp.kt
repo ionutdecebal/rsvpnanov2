@@ -35,6 +35,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rsvpnano.app.RsvpSharedApp
 import com.rsvpnano.converters.RsvpSupportedFileTypes
 import com.rsvpnano.models.NanoBook
+import com.rsvpnano.models.NanoSettings
 import com.rsvpnano.models.PendingUpload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -217,9 +219,7 @@ fun CompanionApp(
                         )
                         CompanionTab.Settings -> SettingsTab(
                             uiState = uiState,
-                            onWpmChange = viewModel::setSettingsWpmDraft,
-                            onBrightnessChange = viewModel::setSettingsBrightnessDraft,
-                            onSaveSettings = viewModel::saveDeviceSettings,
+                            onSaveSettings = viewModel::saveSettings,
                             onWifiSsidChange = viewModel::setWifiSsidDraft,
                             onWifiPasswordChange = viewModel::setWifiPasswordDraft,
                             onSaveWifi = viewModel::saveWifiSettings,
@@ -442,9 +442,7 @@ private fun ArticlesTab(
 @Composable
 private fun SettingsTab(
     uiState: CompanionUiState,
-    onWpmChange: (String) -> Unit,
-    onBrightnessChange: (String) -> Unit,
-    onSaveSettings: () -> Unit,
+    onSaveSettings: (NanoSettings) -> Unit,
     onWifiSsidChange: (String) -> Unit,
     onWifiPasswordChange: (String) -> Unit,
     onSaveWifi: () -> Unit,
@@ -455,28 +453,200 @@ private fun SettingsTab(
         contentPadding = PaddingValues(bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item {
-            SectionCard(title = "Reader Settings") {
-                if (uiState.settings == null) {
-                    Text(text = if (uiState.isConnected) "Settings unavailable." else "Connect to load settings.")
-                } else {
-                    OutlinedTextField(
-                        value = uiState.settingsWpmDraft,
-                        onValueChange = onWpmChange,
-                        label = { Text("Words per minute") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+        val settings = uiState.settings
+        if (settings == null) {
+            item {
+                EmptyCard(text = if (uiState.isConnected) "Settings unavailable." else "Connect to load settings.")
+            }
+        } else {
+            item {
+                SectionCard(title = "Word Pacing") {
+                    ChoiceRow(
+                        label = "Reading mode",
+                        selected = settings.reading.readerMode,
+                        options = listOf("rsvp" to "One word", "scroll" to "Scroll"),
+                        onSelected = { onSaveSettings(settings.withReaderMode(it)) },
                     )
-                    OutlinedTextField(
-                        value = uiState.settingsBrightnessDraft,
-                        onValueChange = onBrightnessChange,
-                        label = { Text("Brightness index") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                    ChoiceRow(
+                        label = "Pause behavior",
+                        selected = settings.reading.pauseMode,
+                        options = listOf("sentence_end" to "Sentence end", "instant" to "Immediate"),
+                        onSelected = { onSaveSettings(settings.withPauseMode(it)) },
                     )
-                    Button(onClick = onSaveSettings) {
-                        Text(text = "Save")
-                    }
+                    SwitchRow(
+                        label = "Accurate time estimate",
+                        checked = settings.reading.accurateTimeEstimate,
+                        onCheckedChange = { onSaveSettings(settings.withAccurateTimeEstimate(it)) },
+                    )
+                    StepperRow(
+                        label = "Base speed",
+                        valueLabel = "${settings.reading.wpm} WPM",
+                        onDecrease = { onSaveSettings(settings.withWpm((settings.reading.wpm - 25).coerceIn(100, 1000))) },
+                        onIncrease = { onSaveSettings(settings.withWpm((settings.reading.wpm + 25).coerceIn(100, 1000))) },
+                    )
+                    StepperRow(
+                        label = "Long words",
+                        valueLabel = "${settings.reading.pacing.longWordMs} ms",
+                        onDecrease = {
+                            onSaveSettings(
+                                settings.withPacingLongWordMs((settings.reading.pacing.longWordMs - 50).coerceIn(0, 600)),
+                            )
+                        },
+                        onIncrease = {
+                            onSaveSettings(
+                                settings.withPacingLongWordMs((settings.reading.pacing.longWordMs + 50).coerceIn(0, 600)),
+                            )
+                        },
+                    )
+                    StepperRow(
+                        label = "Complexity",
+                        valueLabel = "${settings.reading.pacing.complexWordMs} ms",
+                        onDecrease = {
+                            onSaveSettings(
+                                settings.withPacingComplexWordMs((settings.reading.pacing.complexWordMs - 50).coerceIn(0, 600)),
+                            )
+                        },
+                        onIncrease = {
+                            onSaveSettings(
+                                settings.withPacingComplexWordMs((settings.reading.pacing.complexWordMs + 50).coerceIn(0, 600)),
+                            )
+                        },
+                    )
+                    StepperRow(
+                        label = "Punctuation",
+                        valueLabel = "${settings.reading.pacing.punctuationMs} ms",
+                        onDecrease = {
+                            onSaveSettings(
+                                settings.withPacingPunctuationMs((settings.reading.pacing.punctuationMs - 50).coerceIn(0, 600)),
+                            )
+                        },
+                        onIncrease = {
+                            onSaveSettings(
+                                settings.withPacingPunctuationMs((settings.reading.pacing.punctuationMs + 50).coerceIn(0, 600)),
+                            )
+                        },
+                    )
+                }
+            }
+
+            item {
+                SectionCard(title = "Display") {
+                    ChoiceRow(
+                        label = "Display mode",
+                        selected = when {
+                            settings.display.nightMode -> "night"
+                            settings.display.darkMode -> "dark"
+                            else -> "light"
+                        },
+                        options = listOf("light" to "Light", "dark" to "Dark", "night" to "Night"),
+                        onSelected = { mode ->
+                            onSaveSettings(
+                                settings.withAppearance(
+                                    darkMode = mode == "dark" || mode == "night",
+                                    nightMode = mode == "night",
+                                ),
+                            )
+                        },
+                    )
+                    StepperRow(
+                        label = "Brightness",
+                        valueLabel = "${settings.display.brightnessIndex + 1} / 5",
+                        onDecrease = {
+                            onSaveSettings(settings.withBrightnessIndex((settings.display.brightnessIndex - 1).coerceIn(0, 4)))
+                        },
+                        onIncrease = {
+                            onSaveSettings(settings.withBrightnessIndex((settings.display.brightnessIndex + 1).coerceIn(0, 4)))
+                        },
+                    )
+                    ChoiceRow(
+                        label = "Reader hand",
+                        selected = settings.display.handedness,
+                        options = listOf("left" to "Left", "right" to "Right"),
+                        onSelected = { onSaveSettings(settings.withHandedness(it)) },
+                    )
+                    ChoiceRow(
+                        label = "Footer label",
+                        selected = settings.display.footerMetric,
+                        options = listOf(
+                            "percentage" to "Percent",
+                            "chapter_time" to "Chapter time",
+                            "book_time" to "Book time",
+                        ),
+                        onSelected = { onSaveSettings(settings.withFooterMetric(it)) },
+                    )
+                    ChoiceRow(
+                        label = "Battery label",
+                        selected = settings.display.batteryLabel,
+                        options = listOf("percent" to "Percent", "time_remaining" to "Time left"),
+                        onSelected = { onSaveSettings(settings.withBatteryLabel(it)) },
+                    )
+                }
+            }
+
+            item {
+                SectionCard(title = "Typography") {
+                    ChoiceRow(
+                        label = "Typeface",
+                        selected = settings.typography.typeface,
+                        options = listOf(
+                            "standard" to "Standard",
+                            "atkinson" to "Atkinson",
+                            "open_dyslexic" to "OpenDyslexic",
+                        ),
+                        onSelected = { onSaveSettings(settings.withTypeface(it)) },
+                    )
+                    SwitchRow(
+                        label = "Focus highlight",
+                        checked = settings.typography.focusHighlight,
+                        onCheckedChange = { onSaveSettings(settings.withFocusHighlight(it)) },
+                    )
+                    SwitchRow(
+                        label = "Phantom words",
+                        checked = settings.display.phantomWords,
+                        onCheckedChange = { onSaveSettings(settings.withPhantomWords(it)) },
+                    )
+                    StepperRow(
+                        label = "Font size",
+                        valueLabel = "${settings.display.fontSizeIndex + 1} / 3",
+                        onDecrease = {
+                            onSaveSettings(settings.withFontSizeIndex((settings.display.fontSizeIndex - 1).coerceIn(0, 2)))
+                        },
+                        onIncrease = {
+                            onSaveSettings(settings.withFontSizeIndex((settings.display.fontSizeIndex + 1).coerceIn(0, 2)))
+                        },
+                    )
+                    StepperRow(
+                        label = "Tracking",
+                        valueLabel = "${settings.typography.tracking}",
+                        onDecrease = { onSaveSettings(settings.withTracking((settings.typography.tracking - 1).coerceIn(-2, 3))) },
+                        onIncrease = { onSaveSettings(settings.withTracking((settings.typography.tracking + 1).coerceIn(-2, 3))) },
+                    )
+                    StepperRow(
+                        label = "Anchor",
+                        valueLabel = "${settings.typography.anchorPercent}%",
+                        onDecrease = {
+                            onSaveSettings(settings.withAnchorPercent((settings.typography.anchorPercent - 1).coerceIn(30, 40)))
+                        },
+                        onIncrease = {
+                            onSaveSettings(settings.withAnchorPercent((settings.typography.anchorPercent + 1).coerceIn(30, 40)))
+                        },
+                    )
+                    StepperRow(
+                        label = "Guide width",
+                        valueLabel = "${settings.typography.guideWidth}",
+                        onDecrease = {
+                            onSaveSettings(settings.withGuideWidth((settings.typography.guideWidth - 2).coerceIn(12, 30)))
+                        },
+                        onIncrease = {
+                            onSaveSettings(settings.withGuideWidth((settings.typography.guideWidth + 2).coerceIn(12, 30)))
+                        },
+                    )
+                    StepperRow(
+                        label = "Guide gap",
+                        valueLabel = "${settings.typography.guideGap}",
+                        onDecrease = { onSaveSettings(settings.withGuideGap((settings.typography.guideGap - 1).coerceIn(2, 8))) },
+                        onIncrease = { onSaveSettings(settings.withGuideGap((settings.typography.guideGap + 1).coerceIn(2, 8))) },
+                    )
                 }
             }
         }
@@ -515,6 +685,74 @@ private fun SettingsTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChoiceRow(
+    label: String,
+    selected: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, title) ->
+                if (value == selected) {
+                    Button(onClick = { onSelected(value) }) {
+                        Text(text = title)
+                    }
+                } else {
+                    TextButton(onClick = { onSelected(value) }) {
+                        Text(text = title)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepperRow(
+    label: String,
+    valueLabel: String,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.labelLarge)
+            Text(text = valueLabel, style = MaterialTheme.typography.bodyMedium)
+        }
+        TextButton(onClick = onDecrease) {
+            Text(text = "-")
+        }
+        Button(onClick = onIncrease) {
+            Text(text = "+")
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

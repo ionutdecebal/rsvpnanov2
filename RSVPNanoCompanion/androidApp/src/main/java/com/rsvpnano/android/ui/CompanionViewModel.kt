@@ -26,8 +26,6 @@ data class CompanionUiState(
     val settings: NanoSettings? = null,
     val wifiSettings: NanoWifiSettings? = null,
     val address: String = "http://192.168.4.1",
-    val settingsWpmDraft: String = "",
-    val settingsBrightnessDraft: String = "",
     val wifiSsidDraft: String = "",
     val wifiPasswordDraft: String = "",
     val draftTitle: String = "",
@@ -73,10 +71,6 @@ class CompanionViewModel(
         updateState { it.copy(address = SharedAppUtils.DEFAULT_DEVICE_ADDRESS) }
         connect()
     }
-
-    fun setSettingsWpmDraft(value: String) = updateState { it.copy(settingsWpmDraft = value) }
-
-    fun setSettingsBrightnessDraft(value: String) = updateState { it.copy(settingsBrightnessDraft = value) }
 
     fun setWifiSsidDraft(value: String) = updateState { it.copy(wifiSsidDraft = value) }
 
@@ -152,24 +146,13 @@ class CompanionViewModel(
         }
     }
 
-    fun saveDeviceSettings() {
+    fun saveSettings(settings: NanoSettings) {
         viewModelScope.launch {
             val state = current
-            val currentSettings = state.settings
-            if (!state.isConnected || currentSettings == null) {
+            if (!state.isConnected) {
                 setStatus("Connect to the reader before saving settings.")
                 return@launch
             }
-            val wpm = state.settingsWpmDraft.toIntOrNull()
-            val brightness = state.settingsBrightnessDraft.toIntOrNull()
-            if (wpm == null || brightness == null) {
-                setStatus("WPM and brightness must be whole numbers.")
-                return@launch
-            }
-            val settings = currentSettings.copy(
-                reading = currentSettings.reading.copy(wpm = wpm),
-                display = currentSettings.display.copy(brightnessIndex = brightness),
-            )
             setStatus("Saving reader settings...")
             runCatching { companionController.saveSettings(state.address, settings) }
                 .onSuccess { snapshot ->
@@ -177,8 +160,6 @@ class CompanionViewModel(
                     updateState {
                         it.copy(
                             settings = saved,
-                            settingsWpmDraft = saved.reading.wpm.toString(),
-                            settingsBrightnessDraft = saved.display.brightnessIndex.toString(),
                             status = "Reader settings saved.",
                         )
                     }
@@ -528,8 +509,6 @@ class CompanionViewModel(
                 books = device.books,
                 settings = device.settings,
                 wifiSettings = device.wifiSettings,
-                settingsWpmDraft = device.settings?.reading?.wpm?.toString().orEmpty(),
-                settingsBrightnessDraft = device.settings?.display?.brightnessIndex?.toString().orEmpty(),
                 wifiSsidDraft = device.wifiSettings?.ssid.orEmpty(),
                 wifiPasswordDraft = "",
                 address = address,
