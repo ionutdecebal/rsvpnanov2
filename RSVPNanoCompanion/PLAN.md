@@ -41,8 +41,12 @@ Ship native iOS and Android companion apps backed by one Kotlin Multiplatform co
 
 - [ ] Manually smoke test iOS against real RSVP Nano hardware.
 - [ ] Manually smoke test Android against real RSVP Nano hardware.
+  - [x] Uploading to the Nano from a physical Android phone works.
+  - [x] Deleting while the Nano is powered off fails safely with a connection error instead of silently succeeding.
+  - [ ] Re-test full connect/refresh/upload/delete/settings/RSS/article sync pass after connection-delay UX is fixed.
 - [ ] Confirm powered-off/disconnected reader state clears promptly on both platforms.
-- [ ] Confirm destructive operations are blocked or fail safely while disconnected.
+- [x] Confirm destructive operations are blocked or fail safely while disconnected on Android.
+- [ ] Confirm destructive operations are blocked or fail safely while disconnected on iOS.
 - [ ] Confirm core device operations on both platforms:
   - [x] List books/articles.
   - [x] Upload converted books.
@@ -66,6 +70,7 @@ Ship native iOS and Android companion apps backed by one Kotlin Multiplatform co
 - [x] Primary route tells the user to open Companion Sync and join the RSVP-Nano Wi-Fi.
 - [x] App checks `http://192.168.4.1` automatically when returning/connecting.
 - [x] If the default address fails, user can enter the IP/address shown on the reader.
+- [ ] Add a short delay/retry window after returning from Wi-Fi settings or selecting the Nano AP before declaring connection failure.
 - [ ] Improve connection copy for casual users who only see the Nano AP name and `http://192.168.4.1`.
 - [ ] Add clearer offline/disconnected states.
 - [ ] Add automatic connection testing after returning from Wi-Fi settings on both platforms.
@@ -91,6 +96,7 @@ Ship native iOS and Android companion apps backed by one Kotlin Multiplatform co
 - [x] Shared EPUB conversion supports ZIP parsing through Korlibs compression.
 - [x] EPUB2 NCX and EPUB3 nav TOC chapter labels are preferred when available.
 - [x] EPUB generated filename chapter fallback is only used when no usable TOC exists.
+- [x] Dracula EPUB fixtures preserve TOC subtitles when present; some source TOC entries intentionally contain only `CHAPTER <roman numeral>`.
 - [x] Python SD-card converter follows the shared conversion spec.
 - [x] Website converter core is split from UI for CLI/parity reuse.
 - [x] Cross-runtime parity checks cover Kotlin, Python, and web text/HTML conversion.
@@ -168,6 +174,7 @@ Ship native iOS and Android companion apps backed by one Kotlin Multiplatform co
 - [ ] LAN discovery is deferred until firmware exposes a reliable discovery mechanism such as mDNS, a stable hostname, or an advertised API endpoint.
 - [ ] Docker is not useful for real iOS app testing because Xcode/macOS is still required.
 - [ ] Firmware changes are out of scope unless permission to modify the Nano firmware changes.
+- [ ] Firmware Companion sync screen bug: while Companion sync is open, swipe/hold can still enter reading, then the UI returns to the sync screen.
 - [ ] Binary file sharing into local pending drafts is deferred until the product UX is defined.
 
 ## Definition Of Done
