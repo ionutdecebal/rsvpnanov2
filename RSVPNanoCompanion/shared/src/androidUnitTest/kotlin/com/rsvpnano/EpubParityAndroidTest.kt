@@ -55,6 +55,11 @@ class EpubParityAndroidTest {
                 chapters.any { it.contains("7599939443149237915") },
                 "Chapter titles should not fall back to generated XHTML filenames in $name",
             )
+            assertEquals(
+                false,
+                chapters.any { it == "@chapter D R A C U L A" },
+                "Book title pages should not become chapter titles in $name",
+            )
         }
     }
 

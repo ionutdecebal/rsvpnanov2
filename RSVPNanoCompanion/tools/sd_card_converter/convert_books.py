@@ -155,6 +155,10 @@ def zip_join(base: str, href: str) -> str:
     return posixpath.normpath(posixpath.join(posixpath.dirname(base), decoded))
 
 
+def normalize_zip_path(path: str) -> str:
+    return path.replace("\\", "/").lstrip("/")
+
+
 def read_text_file(path: Path) -> str:
     data = path.read_bytes()
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
@@ -389,20 +393,27 @@ def container_rootfile(epub: zipfile.ZipFile) -> str:
     raise ValueError("EPUB container.xml does not name an OPF package file")
 
 
-def parse_package(epub: zipfile.ZipFile, opf_path: str) -> tuple[str, str, list[str]]:
+def parse_package(epub: zipfile.ZipFile, opf_path: str) -> tuple[str, str, list[str], dict[str, str]]:
     package_xml = read_zip_text(epub, opf_path)
     root = ET.fromstring(package_xml)
     title = first_child_text(root, "title")
     author = first_child_text(root, "creator")
 
     manifest: dict[str, tuple[str, str]] = {}
+    nav_paths: list[str] = []
+    ncx_paths: list[str] = []
     for node in root.iter():
         if local_name(node.tag) == "item":
             item_id = node.attrib.get("id")
             href = node.attrib.get("href")
             media_type = node.attrib.get("media-type", "")
             if item_id and href:
-                manifest[item_id] = (zip_join(opf_path, href), media_type)
+                resolved_path = zip_join(opf_path, href)
+                manifest[item_id] = (resolved_path, media_type)
+                if media_type.lower() == "application/x-dtbncx+xml":
+                    ncx_paths.append(resolved_path)
+                if "nav" in node.attrib.get("properties", "").split():
+                    nav_paths.append(resolved_path)
 
     spine_paths: list[str] = []
     for node in root.iter():
@@ -422,7 +433,127 @@ def parse_package(epub: zipfile.ZipFile, opf_path: str) -> tuple[str, str, list[
     if not spine_paths:
         raise ValueError("EPUB spine does not contain readable XHTML/HTML documents")
 
-    return title, author, spine_paths
+    return title, author, spine_paths, toc_titles_by_path(epub, title, nav_paths, ncx_paths)
+
+
+def toc_titles_by_path(
+    epub: zipfile.ZipFile,
+    title: str,
+    nav_paths: list[str],
+    ncx_paths: list[str],
+) -> dict[str, str]:
+    for path in ncx_paths:
+        try:
+            titles = ncx_toc_titles(read_zip_text(epub, path), path, title)
+        except Exception:
+            titles = {}
+        if titles:
+            return titles
+
+    for path in nav_paths:
+        try:
+            titles = html_nav_toc_titles(read_zip_text(epub, path), path, title)
+        except Exception:
+            titles = {}
+        if titles:
+            return titles
+
+    return {}
+
+
+def ncx_toc_titles(xml: str, toc_path: str, book_title: str) -> dict[str, str]:
+    root = ET.fromstring(xml)
+    titles: dict[str, str] = {}
+    for nav_point in root.iter():
+        if local_name(nav_point.tag) != "navPoint":
+            continue
+
+        label = ""
+        src = ""
+        for child in nav_point.iter():
+            name = local_name(child.tag)
+            if name == "text" and not label:
+                label = clean_text("".join(child.itertext()))
+            elif name == "content" and not src:
+                src = child.attrib.get("src", "")
+
+        if src and is_content_toc_title(label, book_title):
+            titles[toc_path_key(toc_path, src)] = label
+    return titles
+
+
+def html_nav_toc_titles(markup: str, toc_path: str, book_title: str) -> dict[str, str]:
+    parser = HtmlTocExtractor(book_title)
+    parser.feed(markup)
+    parser.close()
+    return {toc_path_key(toc_path, href): title for href, title in parser.links}
+
+
+class HtmlTocExtractor(HTMLParser):
+    def __init__(self, book_title: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.book_title = book_title
+        self.links: list[tuple[str, str]] = []
+        self._in_toc_nav = False
+        self._nav_depth = 0
+        self._href: str | None = None
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key.lower(): value or "" for key, value in attrs}
+        tag = tag.lower()
+        if tag == "nav" and (
+            attrs_dict.get("epub:type") == "toc" or attrs_dict.get("type") == "toc"
+        ):
+            self._in_toc_nav = True
+            self._nav_depth = 1
+            return
+        if self._in_toc_nav and tag == "nav":
+            self._nav_depth += 1
+        if self._in_toc_nav and tag == "a":
+            self._href = attrs_dict.get("href", "")
+            self._parts = []
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if self._in_toc_nav and tag == "a" and self._href:
+            label = clean_text(" ".join(self._parts))
+            if is_content_toc_title(label, self.book_title):
+                self.links.append((self._href, label))
+            self._href = None
+            self._parts = []
+            return
+        if self._in_toc_nav and tag == "nav":
+            self._nav_depth -= 1
+            if self._nav_depth <= 0:
+                self._in_toc_nav = False
+
+    def handle_data(self, data: str) -> None:
+        if self._href is not None:
+            self._parts.append(data)
+
+
+def toc_path_key(toc_path: str, href: str) -> str:
+    href = href.split("#", 1)[0].split("?", 1)[0]
+    return normalize_zip_path(zip_join(toc_path, href)).lower()
+
+
+def is_content_toc_title(value: str, book_title: str) -> bool:
+    cleaned = clean_text(value)
+    lowered = cleaned.lower()
+    normalized = normalized_toc_label(cleaned)
+    normalized_title = normalized_toc_label(book_title)
+    return (
+        bool(cleaned)
+        and lowered not in {"contents", "cover", "title page"}
+        and normalized != "tableofcontents"
+        and (not normalized_title or normalized != normalized_title)
+        and any(char.isalnum() for char in cleaned)
+    )
+
+
+def normalized_toc_label(value: str) -> str:
+    return "".join(char.lower() for char in clean_text(value) if char.isalnum())
 
 
 def fallback_chapter_title(path: str, index: int) -> str:
@@ -435,17 +566,43 @@ def epub_events_and_metadata(path: Path) -> tuple[str, str, list[tuple[str, str]
     events: list[tuple[str, str]] = []
     with zipfile.ZipFile(path) as epub:
         opf_path = container_rootfile(epub)
-        title, author, spine_paths = parse_package(epub, opf_path)
+        title, author, spine_paths, toc_titles = parse_package(epub, opf_path)
 
         for index, spine_path in enumerate(spine_paths, start=1):
             chapter_events = html_events(read_zip_text(epub, spine_path))
             if not any(kind == "text" for kind, _ in chapter_events):
                 continue
-            if not any(kind == "chapter" for kind, _ in chapter_events):
+            toc_title = toc_titles.get(normalize_zip_path(spine_path).lower())
+            if toc_title:
+                chapter_events = remove_first_chapter(chapter_events)
+                chapter_events = remove_first_chapter_matching(chapter_events, toc_title)
+                chapter_events.insert(0, ("chapter", toc_title))
+            elif toc_titles:
+                chapter_events = [(kind, value) for kind, value in chapter_events if kind != "chapter"]
+            elif not any(kind == "chapter" for kind, _ in chapter_events):
                 chapter_events.insert(0, ("chapter", fallback_chapter_title(spine_path, index)))
             events.extend(chapter_events)
 
     return title or path.stem, author, events
+
+
+def remove_first_chapter(events: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    result = list(events)
+    for index, (kind, _value) in enumerate(result):
+        if kind == "chapter":
+            del result[index]
+            break
+    return result
+
+
+def remove_first_chapter_matching(events: list[tuple[str, str]], title: str) -> list[tuple[str, str]]:
+    normalized = clean_text(title).lower()
+    result = list(events)
+    for index, (kind, value) in enumerate(result):
+        if kind == "chapter" and clean_text(value).lower() == normalized:
+            del result[index]
+            break
+    return result
 
 
 def events_for_file(path: Path) -> tuple[str, str, list[tuple[str, str]]]:

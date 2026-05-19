@@ -102,6 +102,23 @@ def run_python_html(tmp: Path) -> None:
         run_python_vector(tmp, input_name, expected_name, title, f"Python {Path(input_name).suffix}")
 
 
+def run_python_epub_toc() -> None:
+    module = load_python_converter()
+    for input_name in ("Dracula-epub.epub", "Dracula-epub3.epub"):
+        _title, _author, events = module.events_for_file(VECTORS / input_name)
+        chapters = [value for kind, value in events if kind == "chapter"]
+        if not any(chapter.startswith("CHAPTER I JONATHAN HARKER") for chapter in chapters):
+            raise AssertionError(f"Python EPUB TOC chapter I was not used for {input_name}")
+        if not any(chapter.startswith("CHAPTER II JONATHAN HARKER") for chapter in chapters):
+            raise AssertionError(f"Python EPUB TOC chapter II was not used for {input_name}")
+        if sum(chapter.startswith("CHAPTER I JONATHAN HARKER") for chapter in chapters) != 1:
+            raise AssertionError(f"Python EPUB duplicated chapter I for {input_name}")
+        if any("7599939443149237915" in chapter for chapter in chapters):
+            raise AssertionError(f"Python EPUB used generated XHTML filename chapter for {input_name}")
+        if any(chapter == "D R A C U L A" for chapter in chapters):
+            raise AssertionError(f"Python EPUB used title-page chapter for {input_name}")
+
+
 def run_web_vector(tmp: Path, command: str, input_name: str, expected_name: str, title: str, label: str) -> None:
     node = shutil.which("node")
     if node is None:
@@ -142,6 +159,7 @@ def main() -> int:
             run_kotlin()
         run_python_text(tmp)
         run_python_html(tmp)
+        run_python_epub_toc()
         run_web_text(tmp)
         run_web_html(tmp)
 

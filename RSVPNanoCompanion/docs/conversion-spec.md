@@ -99,12 +99,20 @@ The firmware can read or convert a narrower set directly:
 - Use OPF metadata creator as author when present.
 - Build the manifest from OPF `item` entries.
 - Prefer OPF spine reading order.
+- Support both EPUB2 NCX and EPUB3 navigation documents.
 - Prefer NCX / EPUB3 navigation table-of-contents labels for chapter titles when available.
+- Ignore non-content TOC labels such as cover, title page, table of contents, and labels matching
+  the book title.
 - If the spine is missing or empty, a converter may fall back to manifest content documents.
 - Content documents are selected by media type (`application/xhtml+xml`, `text/html`) or by
   `.xhtml`, `.html`, or `.htm` extension.
 - Each selected content document is processed using the HTML/XHTML rules.
-- If a readable content document has no heading, insert a chapter marker from its filename.
+- If a readable content document is mapped by the EPUB TOC, the output chapter marker must use
+  that TOC label and must not duplicate the document's first heading.
+- If an EPUB TOC is available, readable content documents that are not mapped by the TOC must not
+  receive generated filename chapter markers.
+- If no usable EPUB TOC is available and a readable content document has no heading, insert a
+  chapter marker from its filename.
 
 ## Text Normalization
 

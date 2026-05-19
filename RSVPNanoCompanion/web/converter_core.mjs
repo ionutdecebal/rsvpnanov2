@@ -265,17 +265,25 @@ async function epubEventsAndMetadata(file, mode, options) {
   const JSZip = await loadJsZip();
   const zip = await JSZip.loadAsync(file);
   const opfPath = await containerRootfile(zip);
-  const { title, author, spinePaths } = await parsePackage(zip, opfPath, mode);
+  const { title, author, spinePaths, tocTitlesByPath } = await parsePackage(zip, opfPath, mode);
 
   const events = [];
   for (let index = 0; index < spinePaths.length; index += 1) {
     const spinePath = spinePaths[index];
     const chapterMarkup = await readZipText(zip, spinePath);
-    const chapterEvents = htmlEvents(chapterMarkup, mode);
+    let chapterEvents = htmlEvents(chapterMarkup, mode);
     if (!chapterEvents.some(([kind]) => kind === "text")) {
       continue;
     }
-    if (!chapterEvents.some(([kind]) => kind === "chapter")) {
+
+    const tocTitle = tocTitlesByPath.get(normalizeZipPath(spinePath).toLowerCase());
+    if (tocTitle) {
+      chapterEvents = removeFirstChapter(chapterEvents);
+      chapterEvents = removeFirstChapterMatching(chapterEvents, tocTitle, mode);
+      chapterEvents.unshift(["chapter", tocTitle]);
+    } else if (tocTitlesByPath.size > 0) {
+      chapterEvents = chapterEvents.filter(([kind]) => kind !== "chapter");
+    } else if (!chapterEvents.some(([kind]) => kind === "chapter")) {
       chapterEvents.unshift(["chapter", fallbackChapterTitle(spinePath, index + 1, mode)]);
     }
     events.push(...chapterEvents);
@@ -317,6 +325,8 @@ async function parsePackage(zip, opfPath, mode) {
 
   const manifest = new Map();
   const manifestContentPaths = [];
+  const navPaths = [];
+  const ncxPaths = [];
 
   for (const node of Array.from(doc.getElementsByTagName("*"))) {
     if (localName(node) !== "item") {
@@ -325,6 +335,7 @@ async function parsePackage(zip, opfPath, mode) {
     const itemId = node.getAttribute("id");
     const href = node.getAttribute("href");
     const mediaType = node.getAttribute("media-type") || "";
+    const properties = node.getAttribute("properties") || "";
     if (!itemId || !href) {
       continue;
     }
@@ -337,6 +348,12 @@ async function parsePackage(zip, opfPath, mode) {
 
     if (isContentDocument(resolvedPath, mediaType)) {
       manifestContentPaths.push(resolvedPath);
+    }
+    if (mediaType.toLowerCase() === "application/x-dtbncx+xml") {
+      ncxPaths.push(resolvedPath);
+    }
+    if (properties.split(/\s+/).includes("nav")) {
+      navPaths.push(resolvedPath);
     }
   }
 
@@ -360,7 +377,151 @@ async function parsePackage(zip, opfPath, mode) {
     throw new Error("EPUB spine does not contain readable XHTML/HTML documents.");
   }
 
-  return { title, author, spinePaths: readingOrder };
+  return {
+    title,
+    author,
+    spinePaths: readingOrder,
+    tocTitlesByPath: await tocTitlesByPath(zip, navPaths, ncxPaths, title, mode),
+  };
+}
+
+async function tocTitlesByPath(zip, navPaths, ncxPaths, bookTitle, mode) {
+  for (const path of ncxPaths) {
+    const xml = await readOptionalZipText(zip, path);
+    if (!xml) {
+      continue;
+    }
+    const titles = ncxTocTitles(xml, path, bookTitle, mode);
+    if (titles.size > 0) {
+      return titles;
+    }
+  }
+
+  for (const path of navPaths) {
+    const markup = await readOptionalZipText(zip, path);
+    if (!markup) {
+      continue;
+    }
+    const titles = htmlNavTocTitles(markup, path, bookTitle, mode);
+    if (titles.size > 0) {
+      return titles;
+    }
+  }
+
+  return new Map();
+}
+
+async function readOptionalZipText(zip, requestedPath) {
+  try {
+    return await readZipText(zip, requestedPath);
+  } catch (error) {
+    return null;
+  }
+}
+
+function ncxTocTitles(xml, tocPath, bookTitle, mode) {
+  const doc = parseXmlDocument(xml, "EPUB NCX");
+  const titles = new Map();
+  for (const navPoint of Array.from(doc.getElementsByTagName("*"))) {
+    if (localName(navPoint) !== "navpoint") {
+      continue;
+    }
+
+    const label = firstDescendantText(navPoint, "text", mode);
+    if (!isContentTocTitle(label, bookTitle, mode)) {
+      continue;
+    }
+
+    const content = firstDescendantElement(navPoint, "content");
+    const src = content?.getAttribute("src") || "";
+    if (src) {
+      titles.set(tocPathKey(tocPath, src), label);
+    }
+  }
+  return titles;
+}
+
+function htmlNavTocTitles(markup, tocPath, bookTitle, mode) {
+  if (typeof DOMParser === "undefined") {
+    return new Map();
+  }
+  const doc = new DOMParser().parseFromString(markup, "text/html");
+  const nav =
+    Array.from(doc.getElementsByTagName("*")).find(
+      (node) =>
+        localName(node) === "nav" &&
+        ((node.getAttribute("epub:type") || node.getAttribute("type") || "")
+          .split(/\s+/)
+          .includes("toc")),
+    ) || doc;
+
+  const titles = new Map();
+  for (const anchor of Array.from(nav.getElementsByTagName("a"))) {
+    const label = cleanText(anchor.textContent || "", mode);
+    const href = anchor.getAttribute("href") || "";
+    if (href && isContentTocTitle(label, bookTitle, mode)) {
+      titles.set(tocPathKey(tocPath, href), label);
+    }
+  }
+  return titles;
+}
+
+function firstDescendantText(node, wantedName, mode) {
+  const element = firstDescendantElement(node, wantedName);
+  return element ? cleanText(element.textContent || "", mode) : "";
+}
+
+function firstDescendantElement(node, wantedName) {
+  for (const child of Array.from(node.getElementsByTagName("*"))) {
+    if (localName(child) === wantedName) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function tocPathKey(tocPath, href) {
+  const withoutAnchor = href.split("#", 1)[0].split("?", 1)[0];
+  return normalizeZipPath(zipJoin(tocPath, withoutAnchor)).toLowerCase();
+}
+
+function isContentTocTitle(value, bookTitle, mode) {
+  const cleaned = cleanText(value, mode);
+  const lowered = cleaned.toLowerCase();
+  const normalized = normalizedTocLabel(cleaned, mode);
+  const normalizedBookTitle = normalizedTocLabel(bookTitle, mode);
+  return (
+    cleaned &&
+    !["contents", "cover", "title page"].includes(lowered) &&
+    normalized !== "tableofcontents" &&
+    (!normalizedBookTitle || normalized !== normalizedBookTitle) &&
+    /[\p{L}\p{N}]/u.test(cleaned)
+  );
+}
+
+function normalizedTocLabel(value, mode) {
+  return Array.from(cleanText(value, mode).toLowerCase())
+    .filter((character) => /[\p{L}\p{N}]/u.test(character))
+    .join("");
+}
+
+function removeFirstChapter(events) {
+  const index = events.findIndex(([kind]) => kind === "chapter");
+  if (index < 0) {
+    return events;
+  }
+  return [...events.slice(0, index), ...events.slice(index + 1)];
+}
+
+function removeFirstChapterMatching(events, title, mode) {
+  const normalizedTitle = cleanText(title, mode).toLowerCase();
+  const index = events.findIndex(
+    ([kind, value]) => kind === "chapter" && cleanText(value, mode).toLowerCase() === normalizedTitle,
+  );
+  if (index < 0) {
+    return events;
+  }
+  return [...events.slice(0, index), ...events.slice(index + 1)];
 }
 
 function firstNodeText(doc, name, mode) {

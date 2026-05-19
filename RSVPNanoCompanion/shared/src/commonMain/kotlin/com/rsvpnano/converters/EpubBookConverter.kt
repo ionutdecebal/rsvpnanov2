@@ -27,6 +27,8 @@ internal object EpubBookConverter {
                 chapterEvents.removeFirstMatchingChapter()
                 chapterEvents.removeFirstChapterMatching(tocTitle)
                 chapterEvents.add(0, RsvpEvent.Chapter(tocTitle))
+            } else if (packageInfo.tocTitlesByPath.isNotEmpty()) {
+                chapterEvents.removeAll { it is RsvpEvent.Chapter }
             } else if (packageInfo.tocTitlesByPath.isEmpty() && chapterEvents.none { it is RsvpEvent.Chapter }) {
                 chapterEvents.add(0, RsvpEvent.Chapter(EpubUtils.fallbackChapterTitle(spinePath, index + 1)))
             }
@@ -89,14 +91,16 @@ internal object EpubBookConverter {
             }
         }
 
+        val title = textContentByTag(metadataXml(xml), "title")
+
         return EpubPackage(
-            title = textContentByTag(metadataXml(xml), "title"),
+            title = title,
             author = textContentByTag(metadataXml(xml), "creator"),
             spinePaths = spinePaths,
             manifestContentPaths = manifestContentPaths,
             tocTitlesByPath = tocTitlesByPath(
                 entries = entries,
-                opfPath = opfPath,
+                bookTitle = title,
                 navPaths = navPaths,
                 ncxPaths = ncxPaths,
             ),
@@ -105,34 +109,36 @@ internal object EpubBookConverter {
 
     private fun tocTitlesByPath(
         entries: Map<String, ByteArray>,
-        opfPath: String,
+        bookTitle: String,
         navPaths: List<String>,
         ncxPaths: List<String>,
     ): Map<String, String> {
         ncxPaths.firstNotNullOfOrNull { path ->
             entries[EpubUtils.normalizeZipPath(path).lowercase()]
                 ?.let(RsvpTextUtils::decodeText)
-                ?.let { ncxTocTitles(it, path) }
+                ?.let { ncxTocTitles(it, path, bookTitle) }
                 ?.takeIf { it.isNotEmpty() }
         }?.let { return it }
 
         navPaths.firstNotNullOfOrNull { path ->
             entries[EpubUtils.normalizeZipPath(path).lowercase()]
                 ?.let(RsvpTextUtils::decodeText)
-                ?.let { htmlNavTocTitles(it, path) }
+                ?.let { htmlNavTocTitles(it, path, bookTitle) }
                 ?.takeIf { it.isNotEmpty() }
         }?.let { return it }
 
         return emptyMap()
     }
 
-    private fun ncxTocTitles(xml: String, tocPath: String): Map<String, String> {
+    private fun ncxTocTitles(xml: String, tocPath: String, bookTitle: String): Map<String, String> {
         return Regex(
             "<(?:[A-Za-z_][\\w.-]*:)?navPoint\\b[^>]*>(.*?)</(?:[A-Za-z_][\\w.-]*:)?navPoint>",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         ).findAll(xml).mapNotNull { match ->
             val block = match.groupValues[1]
-            val label = textContentByTag(block, "text").takeIf(::isContentTocTitle) ?: return@mapNotNull null
+            val label = textContentByTag(block, "text")
+                .takeIf { isContentTocTitle(it, bookTitle) }
+                ?: return@mapNotNull null
             val contentAttrs = Regex(
                 "<(?:[A-Za-z_][\\w.-]*:)?content\\b([^>]*)>",
                 RegexOption.IGNORE_CASE,
@@ -142,7 +148,7 @@ internal object EpubBookConverter {
         }.toMap()
     }
 
-    private fun htmlNavTocTitles(markup: String, tocPath: String): Map<String, String> {
+    private fun htmlNavTocTitles(markup: String, tocPath: String, bookTitle: String): Map<String, String> {
         val navBlock = Regex(
             "<(?:[A-Za-z_][\\w.-]*:)?nav\\b[^>]*?(?:epub:type|type)\\s*=\\s*([\"'])toc\\1[^>]*>(.*?)</(?:[A-Za-z_][\\w.-]*:)?nav>",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
@@ -155,7 +161,7 @@ internal object EpubBookConverter {
             val href = attributes(match.groupValues[1])["href"].orEmpty()
             val label = RsvpTextUtils.cleanedLine(
                 decodeXmlEntities(match.groupValues[2].replace(Regex("<[^>]+>"), " "))
-            ).takeIf(::isContentTocTitle) ?: return@mapNotNull null
+            ).takeIf { isContentTocTitle(it, bookTitle) } ?: return@mapNotNull null
             tocPathKey(tocPath, href) to label
         }.toMap()
     }
@@ -165,17 +171,24 @@ internal object EpubBookConverter {
         return EpubUtils.normalizeZipPath(EpubUtils.zipJoin(tocPath, withoutAnchor)).lowercase()
     }
 
-    private fun isContentTocTitle(value: String): Boolean {
+    private fun isContentTocTitle(value: String, bookTitle: String): Boolean {
         val cleaned = RsvpTextUtils.cleanedLine(value)
         val lowered = cleaned.lowercase()
-        val compact = cleaned.filterNot(Char::isWhitespace).lowercase()
+        val normalized = normalizedTocLabel(cleaned)
+        val normalizedBookTitle = normalizedTocLabel(bookTitle)
         return cleaned.isNotEmpty() &&
             lowered != "contents" &&
             lowered != "cover" &&
             lowered != "title page" &&
-            lowered != "dracula" &&
-            compact != "dracula" &&
+            normalized != "tableofcontents" &&
+            (normalizedBookTitle.isEmpty() || normalized != normalizedBookTitle) &&
             cleaned.any(Char::isLetterOrDigit)
+    }
+
+    private fun normalizedTocLabel(value: String): String {
+        return RsvpTextUtils.cleanedLine(value)
+            .filter(Char::isLetterOrDigit)
+            .lowercase()
     }
 
     private fun tagMatches(xml: String, tag: String): Sequence<MatchResult> {
