@@ -142,19 +142,19 @@ Ship native iOS and Android companion apps backed by one Kotlin Multiplatform co
 - [x] Local bridge script was removed because direct Nano AP connection works.
 - [x] Keep `.local` files out of maintainer workflows.
 - [x] Update Android README with build, install, share-target, and hardware testing instructions.
-- [ ] Update iOS README with current shared framework integration and CI expectations.
+- [x] Update iOS README with current shared framework integration and CI expectations.
 - [ ] Document supported import/share types:
   - [x] Text.
   - [x] URLs.
   - [x] Text files.
   - [ ] EPUB/books after the intended UX is decided.
 - [ ] Document RSVP Nano connection limitations:
-  - [ ] Firmware exposes AP details and `http://192.168.4.1`.
-  - [ ] App cannot change firmware UI.
-  - [ ] Primary UX assumes the user joins the Nano AP when needed.
+  - [x] Firmware exposes AP details and `http://192.168.4.1`.
+  - [x] App cannot change firmware UI.
+  - [x] Primary UX assumes the user joins the Nano AP when needed.
 - [ ] Document CI artifacts:
   - [ ] Android APK/AAR outputs.
-  - [ ] iOS XCFramework output.
+  - [x] iOS XCFramework output.
 - [ ] Add release checklist:
   - [ ] Android debug/release build.
   - [ ] iOS app build.

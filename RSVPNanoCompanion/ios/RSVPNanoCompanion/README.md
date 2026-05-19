@@ -1,110 +1,116 @@
-# RSVP Nano Companion
+# RSVP Nano iOS Companion
 
-Native SwiftUI iPhone app for RSVP Nano companion sync.
+Native SwiftUI companion app and share extension for RSVP Nano.
 
-The app is not required for the public firmware release. Android, desktop, and iPhone users can use
-the device-hosted web companion from Companion sync. The native app adds the iOS share sheet flow,
-local article drafts, and a more polished iPhone experience.
+The iOS UI stays native. Shared business logic comes from the Kotlin Multiplatform `:shared`
+module: converters, models, API access, persistence, RSS/article workflows, and device
+orchestration should stay shared.
 
-TestFlight/App Store distribution is planned. Until that is approved, installing from Xcode is the
-temporary tester path.
+## Requirements
 
-## Install From Your Mac
+- macOS with Xcode.
+- JDK 17 for building the Kotlin shared framework.
+- An Apple developer team for device signing.
+- An iPhone for realistic app/share-extension testing.
 
-This is a temporary no-TestFlight install path for owners, contributors, and testers who are
-comfortable using Xcode.
+Free Apple IDs can install development builds on personal devices, but provisioning can expire
+quickly and may not support every share-extension/App Group capability. TestFlight/App Store
+distribution requires the Apple Developer Program.
 
-1. Install Xcode from the Mac App Store.
-2. Open Xcode and sign in:
-   - `Xcode -> Settings -> Accounts`
-   - Add your Apple ID.
-3. Connect your iPhone to the Mac with USB.
-4. Unlock the iPhone and tap `Trust This Computer` if prompted.
-5. If iOS asks for Developer Mode, enable it:
-   - `Settings -> Privacy & Security -> Developer Mode`
-   - Restart the iPhone when prompted.
-6. Open:
+## Build Shared Framework
+
+Build the Kotlin Multiplatform XCFramework from the repository root:
+
+```bash
+bash RSVPNanoCompanion/tools/build_shared_xcframework.sh
+```
+
+The script writes:
+
+```text
+RSVPNanoCompanion/ios/RSVPNanoCompanion/SharedFrameworks/shared.xcframework
+```
+
+The iOS project expects that framework to be embedded and signed by Xcode. If Xcode loses the
+reference, add `SharedFrameworks/shared.xcframework` back to `Frameworks, Libraries, and Embedded
+Content` for the app target and set it to `Embed & Sign`.
+
+## Open In Xcode
+
+Open:
 
 ```text
 RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion.xcodeproj
 ```
 
-7. Select the `RSVPNanoCompanion` scheme.
-8. Select your connected iPhone as the run destination.
-9. Select the project in Xcode, then check signing for both targets:
-   - `RSVPNanoCompanion`
-   - `RSVPNanoShareExtension`
-10. In `Signing & Capabilities`, enable `Automatically manage signing` and choose your team.
-11. If Xcode says the bundle identifier is unavailable, change both bundle IDs to something unique,
-    for example:
+Use the `RSVPNanoCompanion` scheme for the main app. Check signing for both targets:
+
+- `RSVPNanoCompanion`
+- `RSVPNanoShareExtension`
+
+Both targets must use the same App Group. The default group is:
 
 ```text
-com.yourname.rsvpnano
-com.yourname.rsvpnano.share
+group.com.rsvpnano.companion
 ```
 
-12. The app and share extension must use the same App Group. If you change it, update all three
-    places:
+If you need a personal bundle ID or App Group, update all matching locations:
 
 ```text
-RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion.entitlements
+RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion/RSVPNanoCompanion.entitlements
 RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoShareExtension/RSVPNanoShareExtension.entitlements
 RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion/Models.swift
 ```
 
-For example:
+## Run On Device
 
-```text
-group.com.yourname.rsvpnano
+1. Connect an unlocked iPhone over USB.
+2. Trust the Mac if iOS prompts.
+3. Enable Developer Mode if iOS prompts:
+   `Settings -> Privacy & Security -> Developer Mode`.
+4. Select the connected iPhone as the Xcode run destination.
+5. Build and run the `RSVPNanoCompanion` scheme.
+6. If iOS blocks launch, trust the developer profile:
+   `Settings -> General -> VPN & Device Management`.
+
+## CI Expectations
+
+The macOS CI workflow runs shared checks, builds the Kotlin XCFramework, and uploads the generated
+framework artifact. CI validates the shared iOS build path, but real app/share-extension behavior
+still needs Xcode and device testing.
+
+Run this locally on macOS when touching shared/iOS integration:
+
+```bash
+./gradlew :shared:check --no-daemon
+bash RSVPNanoCompanion/tools/build_shared_xcframework.sh
 ```
-
-13. Press `Run` in Xcode. Xcode builds, installs, and launches the app on the iPhone.
-14. If iOS says the developer is not trusted, open:
-    - `Settings -> General -> VPN & Device Management`
-    - Trust your developer profile.
-
-Free Apple IDs can run apps on personal devices, but they may have short-lived provisioning and may
-not support every capability needed by the share extension. A paid Apple Developer Program account
-is still required for TestFlight, App Store, and unlisted App Store distribution.
-
-## Kotlin Shared Framework
-
-The iOS app is migrating to a Kotlin Multiplatform shared module. The framework is built as an
-XCFramework from the `shared` Gradle module and then embedded in Xcode.
-
-1. Build and copy the XCFramework:
-
-```text
-RSVPNanoCompanion/tools/build_shared_xcframework.sh
-```
-
-2. In Xcode, open the project and add the framework:
-   - Drag `RSVPNanoCompanion/ios/RSVPNanoCompanion/SharedFrameworks/shared.xcframework` into the project navigator.
-   - In `Frameworks, Libraries, and Embedded Content`, set it to `Embed & Sign`.
-3. Build the app to verify the shared module is linked.
-
-Pending article and RSS persistence are owned by the Kotlin shared module. Swift keeps only thin UI
-models and calls the generated shared library from both the app and share extension.
 
 ## Connect To The Reader
 
 1. Put the reader into `Companion sync`.
 2. Join the `RSVP-Nano-xxxxxx` Wi-Fi network shown on the reader in iPhone Settings.
 3. Return to the app.
-4. The library appears once the HTTP API at `192.168.4.1` is reachable.
+4. The app checks `http://192.168.4.1` automatically.
+5. If the default address is not reachable, enter the address shown on the reader.
 
-The app can read `/api/info`, list `/api/books`, delete books, upload files, change device
-settings, save Wi-Fi credentials for RSS/OTA, and manage RSS feeds. The library shows saved reading
-percentage when the reader reports `progressPercent` for a book.
+The app cannot change the reader firmware UI. The firmware currently shows the AP name and
+`http://192.168.4.1` while Companion sync is active.
 
-## Add Reading Material
+## Current Capabilities
 
-- `Upload File`: pick `.rsvp`, `.epub`, `.txt`, `.md`, `.markdown`, `.html`, `.htm`, or `.xhtml`
-  from Files. EPUB/Text/Markdown/HTML files are converted locally when possible; unsupported EPUB
-  archives are uploaded as `.epub` so the reader can convert them on open.
-- `New Text`: paste text or article extracts, optionally with a title/source, and upload the
-  generated `.rsvp`.
-- Share Extension: from Safari or another app, share a URL or selected text to `RSVP Nano`. The
-  extension extracts and formats the article, converts it to `.rsvp`, and saves it into the app's
-  pending inbox. Open the companion app later, connect to the reader Wi-Fi, and use `Sync Saved
-  Articles`.
+- List, upload, and delete books/articles on the reader.
+- Read and save reader settings.
+- Read, save, and clear reader Wi-Fi settings.
+- Add local RSS feeds and sync them to the reader.
+- Save text/article drafts locally.
+- Fetch URL-only article drafts.
+- Sync saved articles to the reader.
+- Import `.rsvp`, `.epub`, `.txt`, `.md`, `.markdown`, `.html`, `.htm`, and `.xhtml` files.
+- Save incoming URLs or selected text from the iOS share extension.
+
+## Share Extension
+
+From Safari or another app, share a URL or selected text to `RSVP Nano`. The extension saves a local
+draft through the shared module. Open the companion app later, connect to the reader, then sync saved
+articles.
