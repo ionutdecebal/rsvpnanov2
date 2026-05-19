@@ -8,18 +8,27 @@ struct ChapterMarker {
   size_t wordIndex = 0;
 };
 
-struct BookContent {
+struct BookMetadata {
   String title;
   String author;
-  std::vector<String> words;
+  size_t wordCount = 0;
   std::vector<ChapterMarker> chapters;
   std::vector<size_t> paragraphStarts;
 
   void clear() {
     title = "";
     author = "";
-    words.clear();
+    wordCount = 0;
     chapters.clear();
     paragraphStarts.clear();
+  }
+};
+
+struct BookContent : BookMetadata {
+  std::vector<String> words;
+
+  void clear() {
+    BookMetadata::clear();
+    words.clear();
   }
 };

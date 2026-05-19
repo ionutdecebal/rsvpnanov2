@@ -233,6 +233,30 @@ DisplayManager::ReaderTypeface effectiveReaderTypefaceForText(const String &) {
   return currentReaderTypeface();
 }
 
+bool invertedPunctuationBaseByte(uint8_t value, uint8_t &base) {
+  switch (value) {
+    case 0x16:
+      base = static_cast<uint8_t>('!');
+      return true;
+    case 0x17:
+      base = static_cast<uint8_t>('?');
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool shouldDrawInvertedGlyph(char c) {
+  uint8_t base = 0;
+  return invertedPunctuationBaseByte(LatinText::byteValue(c), base);
+}
+
+String readerChromeKey(const DisplayManager::ReaderChrome &chrome) {
+  return String(chrome.showBattery ? 1 : 0) + String(chrome.showChapter ? 1 : 0) +
+         String(chrome.showProgress ? 1 : 0) +
+         String(chrome.showPreviousSentenceHint ? 1 : 0);
+}
+
 int baseGlyphHeightForTypeface(DisplayManager::ReaderTypeface typeface) {
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
@@ -351,13 +375,16 @@ ReaderGlyph serif70GlyphForByte(uint8_t value) {
 
 ReaderGlyph glyphFor(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
+  uint8_t baseValue = 0;
+  const uint8_t lookupValue = invertedPunctuationBaseByte(value, baseValue) ? baseValue : value;
 
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic: {
       const uint8_t glyphValue =
-          (value >= kEmbeddedOpenDyslexicFirstChar && value <= kEmbeddedOpenDyslexicLastChar)
-              ? value
-              : LatinText::fallbackAsciiByte(value);
+          (lookupValue >= kEmbeddedOpenDyslexicFirstChar &&
+           lookupValue <= kEmbeddedOpenDyslexicLastChar)
+              ? lookupValue
+              : LatinText::fallbackAsciiByte(lookupValue);
       const EmbeddedOpenDyslexicGlyph &glyph =
           kEmbeddedOpenDyslexicGlyphs[glyphValue - kEmbeddedOpenDyslexicFirstChar];
       return {kEmbeddedOpenDyslexicBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
@@ -365,9 +392,9 @@ ReaderGlyph glyphFor(char c, DisplayManager::ReaderTypeface typeface) {
     }
     case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
       const uint8_t glyphValue =
-          (value >= kEmbeddedAtkinsonFirstChar && value <= kEmbeddedAtkinsonLastChar)
-              ? value
-              : LatinText::fallbackAsciiByte(value);
+          (lookupValue >= kEmbeddedAtkinsonFirstChar && lookupValue <= kEmbeddedAtkinsonLastChar)
+              ? lookupValue
+              : LatinText::fallbackAsciiByte(lookupValue);
       const EmbeddedAtkinsonGlyph &glyph =
           kEmbeddedAtkinsonGlyphs[glyphValue - kEmbeddedAtkinsonFirstChar];
       return {kEmbeddedAtkinsonBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
@@ -375,7 +402,7 @@ ReaderGlyph glyphFor(char c, DisplayManager::ReaderTypeface typeface) {
     }
     case DisplayManager::ReaderTypeface::Standard:
     default:
-      return serifGlyphForByte(value);
+      return serifGlyphForByte(lookupValue);
   }
 }
 
@@ -383,13 +410,16 @@ ReaderGlyph glyphFor(char c) { return glyphFor(c, currentReaderTypeface()); }
 
 ReaderGlyph glyph70For(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
+  uint8_t baseValue = 0;
+  const uint8_t lookupValue = invertedPunctuationBaseByte(value, baseValue) ? baseValue : value;
 
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic: {
       const uint8_t glyphValue =
-          (value >= kEmbeddedOpenDyslexic70FirstChar && value <= kEmbeddedOpenDyslexic70LastChar)
-              ? value
-              : LatinText::fallbackAsciiByte(value);
+          (lookupValue >= kEmbeddedOpenDyslexic70FirstChar &&
+           lookupValue <= kEmbeddedOpenDyslexic70LastChar)
+              ? lookupValue
+              : LatinText::fallbackAsciiByte(lookupValue);
       const EmbeddedOpenDyslexic70Glyph &glyph =
           kEmbeddedOpenDyslexic70Glyphs[glyphValue - kEmbeddedOpenDyslexic70FirstChar];
       return {kEmbeddedOpenDyslexic70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
@@ -397,9 +427,10 @@ ReaderGlyph glyph70For(char c, DisplayManager::ReaderTypeface typeface) {
     }
     case DisplayManager::ReaderTypeface::AtkinsonHyperlegible: {
       const uint8_t glyphValue =
-          (value >= kEmbeddedAtkinson70FirstChar && value <= kEmbeddedAtkinson70LastChar)
-              ? value
-              : LatinText::fallbackAsciiByte(value);
+          (lookupValue >= kEmbeddedAtkinson70FirstChar &&
+           lookupValue <= kEmbeddedAtkinson70LastChar)
+              ? lookupValue
+              : LatinText::fallbackAsciiByte(lookupValue);
       const EmbeddedAtkinson70Glyph &glyph =
           kEmbeddedAtkinson70Glyphs[glyphValue - kEmbeddedAtkinson70FirstChar];
       return {kEmbeddedAtkinson70Bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width,
@@ -407,7 +438,7 @@ ReaderGlyph glyph70For(char c, DisplayManager::ReaderTypeface typeface) {
     }
     case DisplayManager::ReaderTypeface::Standard:
     default:
-      return serif70GlyphForByte(value);
+      return serif70GlyphForByte(lookupValue);
   }
 }
 
@@ -445,6 +476,14 @@ const uint8_t *tinyRowsFor(char c) {
 
 uint16_t panelColor(uint16_t rgb565) {
   return static_cast<uint16_t>((rgb565 << 8) | (rgb565 >> 8));
+}
+
+bool packedLifeCellAlive(const std::vector<uint32_t> &cells, size_t index) {
+  const size_t word = index / 32U;
+  if (word >= cells.size()) {
+    return false;
+  }
+  return (cells[word] & (1UL << (index % 32U))) != 0;
 }
 
 bool isWordCharacter(char c) { return LatinText::isWordCharacter(LatinText::byteValue(c)); }
@@ -1209,6 +1248,7 @@ void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color, ReaderTypef
   if (glyph.width == 0) {
     return;
   }
+  const bool invert = shouldDrawInvertedGlyph(c);
 
   for (int row = 0; row < glyph.height; ++row) {
     const int dstY = y + row;
@@ -1222,7 +1262,9 @@ void DisplayManager::drawGlyph(int x, int y, char c, uint16_t color, ReaderTypef
         continue;
       }
 
-      const uint8_t alpha = glyph.bitmap[row * glyph.width + col];
+      const int sourceRow = invert ? glyph.height - 1 - row : row;
+      const int sourceCol = invert ? glyph.width - 1 - col : col;
+      const uint8_t alpha = glyph.bitmap[sourceRow * glyph.width + sourceCol];
       if (alpha < kGlyphAlphaThreshold) {
         continue;
       }
@@ -1244,6 +1286,7 @@ void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, 
   if (glyph.width == 0) {
     return;
   }
+  const bool invert = shouldDrawInvertedGlyph(c);
 
   const int glyphHeight = glyph.height;
   const int scaledWidth = std::max(1, (glyph.width + divisor - 1) / divisor);
@@ -1269,7 +1312,9 @@ void DisplayManager::drawSerifGlyphScaled(int x, int y, char c, uint16_t color, 
       uint32_t sampleCount = 0;
       for (int sourceY = sourceYStart; sourceY < sourceYEnd; ++sourceY) {
         for (int sourceX = sourceXStart; sourceX < sourceXEnd; ++sourceX) {
-          alphaSum += glyph.bitmap[sourceY * glyph.width + sourceX];
+          const int lookupY = invert ? glyphHeight - 1 - sourceY : sourceY;
+          const int lookupX = invert ? glyph.width - 1 - sourceX : sourceX;
+          alphaSum += glyph.bitmap[lookupY * glyph.width + lookupX];
           ++sampleCount;
         }
       }
@@ -1295,6 +1340,7 @@ void DisplayManager::drawSerif70Glyph(int x, int y, char c, uint16_t color, Read
   if (glyph.width == 0) {
     return;
   }
+  const bool invert = shouldDrawInvertedGlyph(c);
 
   for (int row = 0; row < glyph.height; ++row) {
     const int dstY = y + row;
@@ -1308,7 +1354,9 @@ void DisplayManager::drawSerif70Glyph(int x, int y, char c, uint16_t color, Read
         continue;
       }
 
-      const uint8_t alpha = glyph.bitmap[row * glyph.width + col];
+      const int sourceRow = invert ? glyph.height - 1 - row : row;
+      const int sourceCol = invert ? glyph.width - 1 - col : col;
+      const uint8_t alpha = glyph.bitmap[sourceRow * glyph.width + sourceCol];
       if (alpha < kGlyphAlphaThreshold) {
         continue;
       }
@@ -1336,6 +1384,7 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
   if (glyph.width == 0) {
     return;
   }
+  const bool invert = shouldDrawInvertedGlyph(c);
 
   const int glyphHeight = glyph.height;
   const int scaledWidth = scaledPercentDimension(glyph.width, scalePercent);
@@ -1364,7 +1413,9 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
       uint32_t sampleCount = 0;
       for (int sourceY = sourceYStart; sourceY < sourceYEnd; ++sourceY) {
         for (int sourceX = sourceXStart; sourceX < sourceXEnd; ++sourceX) {
-          alphaSum += glyph.bitmap[sourceY * glyph.width + sourceX];
+          const int lookupY = invert ? glyphHeight - 1 - sourceY : sourceY;
+          const int lookupX = invert ? glyph.width - 1 - sourceX : sourceX;
+          alphaSum += glyph.bitmap[lookupY * glyph.width + lookupX];
           ++sampleCount;
         }
       }
@@ -1533,17 +1584,28 @@ void DisplayManager::drawPreviousSentenceHint() {
   drawTinyTextAt("<<", kFooterMarginX, kFooterMarginBottom, footerColor(), kTinyScale);
 }
 
-void DisplayManager::drawFooter(const String &chapterLabel, const String &statusLabel) {
-  const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
-  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom;
-  const int statusWidth = measureTinyTextWidth(status, kTinyScale);
-  const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - statusWidth);
-  const int maxChapterWidth = std::max(0, rightX - kFooterMarginX - 18);
-  const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
-                                    maxChapterWidth, kTinyScale);
+void DisplayManager::drawFooter(const String &chapterLabel, const String &statusLabel,
+                                const ReaderChrome &chrome) {
+  if (!chrome.showChapter && !chrome.showProgress) {
+    return;
+  }
 
-  drawTinyTextAt(chapter, kFooterMarginX, y, footerColor(), kTinyScale);
-  drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
+  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom;
+  int maxChapterWidth = kDisplayWidth - (kFooterMarginX * 2);
+
+  if (chrome.showProgress) {
+    const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
+    const int statusWidth = measureTinyTextWidth(status, kTinyScale);
+    const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - statusWidth);
+    maxChapterWidth = std::max(0, rightX - kFooterMarginX - 18);
+    drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
+  }
+
+  if (chrome.showChapter) {
+    const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
+                                      maxChapterWidth, kTinyScale);
+    drawTinyTextAt(chapter, kFooterMarginX, y, footerColor(), kTinyScale);
+  }
 }
 
 void DisplayManager::drawRsvpAnchorGuide(int anchorX, int textY, int textHeight) {
@@ -1779,11 +1841,12 @@ void DisplayManager::renderCenteredWord(const String &word, uint16_t color) {
 
 void DisplayManager::renderRsvpWord(const String &word, const String &chapterLabel,
                                     uint8_t progressPercent, bool showFooter,
-                                    const String &footerStatusLabel) {
+                                    const String &footerStatusLabel, ReaderChrome chrome) {
   const String renderKey =
       "rsvp|" + word + "|" + chapterLabel + "|" + String(progressPercent) + "|" +
       String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel + "|b:" + batteryLabel_ +
-      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      "|rc:" + readerChromeKey(chrome) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+      String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1804,21 +1867,28 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
   drawRsvpWordAt(word, x, y, focusIndex);
   if (showFooter) {
     drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                         : footerStatusLabel);
+                                                         : footerStatusLabel,
+               chrome);
   }
-  drawBatteryBadge(virtualWidth, virtualHeight);
+  if (chrome.showPreviousSentenceHint) {
+    drawPreviousSentenceHint();
+  }
+  if (chrome.showBattery) {
+    drawBatteryBadge(virtualWidth, virtualHeight);
+  }
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 
 void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
                                            const String &chapterLabel, uint8_t progressPercent,
-                                           bool showFooter, const String &footerStatusLabel) {
+                                           bool showFooter, const String &footerStatusLabel,
+                                           ReaderChrome chrome) {
   const String wpmText = String(wpm) + " WPM";
   const String renderKey =
       "rsvp_wpm|" + word + "|" + wpmText + "|" + chapterLabel + "|" +
       String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel +
-      "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
-      String(nightMode_ ? 1 : 0);
+      "|b:" + batteryLabel_ + "|rc:" + readerChromeKey(chrome) + "|d:" +
+      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1842,21 +1912,29 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
   drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
   if (showFooter) {
     drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                         : footerStatusLabel);
+                                                         : footerStatusLabel,
+               chrome);
   }
-  drawBatteryBadge();
+  if (chrome.showPreviousSentenceHint) {
+    drawPreviousSentenceHint();
+  }
+  if (chrome.showBattery) {
+    drawBatteryBadge();
+  }
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 
 void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const String &word,
                                            const String &afterText, uint8_t fontSizeLevel,
                                            const String &chapterLabel, uint8_t progressPercent,
-                                           bool showFooter, const String &footerStatusLabel) {
+                                           bool showFooter, const String &footerStatusLabel,
+                                           ReaderChrome chrome) {
   const String renderKey =
       "rsvp_phantom|" + beforeText + "|" + word + "|" + afterText + "|s:" +
       String(fontSizeLevel) + "|" + chapterLabel + "|" + String(progressPercent) + "|" +
       String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel + "|b:" + batteryLabel_ +
-      "|d:" + String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
+      "|rc:" + readerChromeKey(chrome) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+      String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -1892,10 +1970,15 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     }
     if (showFooter) {
       drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                           : footerStatusLabel);
+                                                           : footerStatusLabel,
+                 chrome);
+    }
+    if (chrome.showPreviousSentenceHint) {
       drawPreviousSentenceHint();
     }
-    drawBatteryBadge();
+    if (chrome.showBattery) {
+      drawBatteryBadge();
+    }
     flushScaledFrame(scale, virtualWidth, virtualHeight);
     return;
   }
@@ -1932,10 +2015,15 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
   }
   if (showFooter) {
     drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                         : footerStatusLabel);
+                                                         : footerStatusLabel,
+               chrome);
+  }
+  if (chrome.showPreviousSentenceHint) {
     drawPreviousSentenceHint();
   }
-  drawBatteryBadge();
+  if (chrome.showBattery) {
+    drawBatteryBadge();
+  }
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 
@@ -1943,9 +2031,9 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
                                           size_t currentWordIndex, uint8_t fontSizeLevel,
                                           uint16_t motionPermille, const String &chapterLabel,
                                           uint8_t progressPercent, const String &overlayText,
-                                          bool showFooter) {
+                                          bool showFooter, ReaderChrome chrome) {
   if (words.empty()) {
-    renderRsvpWord("", chapterLabel, progressPercent, showFooter);
+    renderRsvpWord("", chapterLabel, progressPercent, showFooter, "", chrome);
     return;
   }
   if (currentWordIndex >= words.size()) {
@@ -1955,12 +2043,13 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
     motionPermille = 1000;
   }
 
-  const bool canUseBandOnly = !showFooter && overlayText.isEmpty() && tickerPlaybackFrameActive_;
+  const bool canUseBandOnly = !showFooter && overlayText.isEmpty() &&
+                              !chrome.showPreviousSentenceHint && tickerPlaybackFrameActive_;
   String renderKey =
       "ticker|" + String(fontSizeLevel) + "|i:" + String(currentWordIndex) + "|m:" +
       String(motionPermille) + "|f:" + String(showFooter ? 1 : 0) + "|d:" +
       String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0) + "|wc:" +
-      String(words.size());
+      String(words.size()) + "|rc:" + readerChromeKey(chrome);
   if (!canUseBandOnly) {
     renderKey += "|c:";
     renderKey += chapterLabel;
@@ -2049,10 +2138,15 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
       drawTinyTextCentered(overlayText, overlayY, focusColor(), kTinyScale);
     }
     if (showFooter) {
-      drawFooter(chapterLabel, String(progressPercent) + "%");
+      drawFooter(chapterLabel, String(progressPercent) + "%", chrome);
+    }
+    if (chrome.showPreviousSentenceHint) {
+      drawPreviousSentenceHint();
     }
     if (!canUseBandOnly) {
-      drawBatteryBadge();
+      if (chrome.showBattery) {
+        drawBatteryBadge();
+      }
       flushScaledFrame(scale, virtualWidth, virtualHeight);
       tickerPlaybackFrameActive_ = !showFooter && overlayText.isEmpty();
     } else {
@@ -2130,10 +2224,15 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
     drawTinyTextCentered(overlayText, overlayY, focusColor(), kTinyScale);
   }
   if (showFooter) {
-    drawFooter(chapterLabel, String(progressPercent) + "%");
+    drawFooter(chapterLabel, String(progressPercent) + "%", chrome);
+  }
+  if (chrome.showPreviousSentenceHint) {
+    drawPreviousSentenceHint();
   }
   if (!canUseBandOnly) {
-    drawBatteryBadge();
+    if (chrome.showBattery) {
+      drawBatteryBadge();
+    }
     flushScaledFrame(scale, virtualWidth, virtualHeight);
     tickerPlaybackFrameActive_ = !showFooter && overlayText.isEmpty();
   } else {
@@ -2248,14 +2347,15 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
                                                   const String &afterText, uint8_t fontSizeLevel,
                                                   uint16_t wpm, const String &chapterLabel,
                                                   uint8_t progressPercent, bool showFooter,
-                                                  const String &footerStatusLabel) {
+                                                  const String &footerStatusLabel,
+                                                  ReaderChrome chrome) {
   const String wpmText = String(wpm) + " WPM";
   const String renderKey =
       "rsvp_phantom_wpm|" + beforeText + "|" + word + "|" + afterText + "|s:" +
       String(fontSizeLevel) + "|" + wpmText + "|" + chapterLabel + "|" +
       String(progressPercent) + "|" + String(showFooter ? 1 : 0) + "|f:" + footerStatusLabel +
-      "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
-      String(nightMode_ ? 1 : 0);
+      "|b:" + batteryLabel_ + "|rc:" + readerChromeKey(chrome) + "|d:" +
+      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -2294,10 +2394,15 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
     if (showFooter) {
       drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                           : footerStatusLabel);
+                                                           : footerStatusLabel,
+                 chrome);
+    }
+    if (chrome.showPreviousSentenceHint) {
       drawPreviousSentenceHint();
     }
-    drawBatteryBadge();
+    if (chrome.showBattery) {
+      drawBatteryBadge();
+    }
     flushScaledFrame(scale, virtualWidth, virtualHeight);
     return;
   }
@@ -2337,10 +2442,15 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
   drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
   if (showFooter) {
     drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                         : footerStatusLabel);
+                                                         : footerStatusLabel,
+               chrome);
+  }
+  if (chrome.showPreviousSentenceHint) {
     drawPreviousSentenceHint();
   }
-  drawBatteryBadge();
+  if (chrome.showBattery) {
+    drawBatteryBadge();
+  }
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 
@@ -2349,9 +2459,9 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
                                       uint16_t scrollProgressPermille,
                                       const String &chapterLabel, uint8_t progressPercent,
                                       const String &overlayText,
-                                      const String &footerStatusLabel) {
+                                      const String &footerStatusLabel, ReaderChrome chrome) {
   if (words.empty()) {
-    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel);
+    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel, chrome);
     return;
   }
 
@@ -2365,9 +2475,11 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
   const int overlayReserve = overlayText.isEmpty() ? 0 : (kTinyGlyphHeight * kTinyScale + 6);
+  const bool showFooterRow = chrome.showChapter || chrome.showProgress;
+  const int footerReserve =
+      showFooterRow ? (kTinyGlyphHeight * kTinyScale + kFooterMarginBottom + 6) : 6;
   const int textTop = kScrollTop;
-  const int textBottom =
-      virtualHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom - 6 - overlayReserve;
+  const int textBottom = virtualHeight - footerReserve - overlayReserve;
   const ReaderTypeface contextTypeface = currentReaderTypeface();
   const int contextGlyphHeight = std::max(
       1, (baseGlyphHeightForTypeface(contextTypeface) + kScrollSerifDivisor - 1) /
@@ -2439,7 +2551,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   }
 
   if (lines.empty()) {
-    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel);
+    renderRsvpWord("", chapterLabel, progressPercent, true, footerStatusLabel, chrome);
     return;
   }
 
@@ -2477,8 +2589,8 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
       "scroll|" + String(contentToken) + "|" + String(windowStartIndex) + "|" +
       String(currentWordIndex) + "|" + String(words.size()) + "|" + String(scrollOffset) +
       "|" + chapterLabel + "|" + String(progressPercent) + "|o:" + overlayText + "|f:" +
-      footerStatusLabel + "|b:" + batteryLabel_ + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
-      String(nightMode_ ? 1 : 0);
+      footerStatusLabel + "|b:" + batteryLabel_ + "|rc:" + readerChromeKey(chrome) + "|d:" +
+      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0);
   if (!initialized_ || renderKey == lastRenderKey_) {
     return;
   }
@@ -2516,8 +2628,14 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   }
 
   drawFooter(chapterLabel, footerStatusLabel.isEmpty() ? String(progressPercent) + "%"
-                                                       : footerStatusLabel);
-  drawBatteryBadge();
+                                                       : footerStatusLabel,
+             chrome);
+  if (chrome.showPreviousSentenceHint) {
+    drawPreviousSentenceHint();
+  }
+  if (chrome.showBattery) {
+    drawBatteryBadge();
+  }
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 
@@ -2894,6 +3012,75 @@ void DisplayManager::renderProgress(const String &title, const String &line1, co
   }
 
   drawBatteryBadge();
+  flushScaledFrame(scale, virtualWidth, virtualHeight);
+}
+
+void DisplayManager::renderLifeScreensaver(const std::vector<uint32_t> &cells, uint16_t columns,
+                                           uint16_t rows, uint32_t generation,
+                                           const std::vector<uint32_t> *dimCells) {
+  const String renderKey = "life|" + String(generation) + "|" + String(columns) + "|" +
+                           String(rows) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+                           String(nightMode_ ? 1 : 0) + "|w0:" +
+                           String(cells.empty() ? 0UL : static_cast<unsigned long>(cells[0])) +
+                           "|w1:" +
+                           String(cells.empty()
+                                      ? 0UL
+                                      : static_cast<unsigned long>(cells[cells.size() - 1])) +
+                           "|dw0:" +
+                           String((dimCells == nullptr || dimCells->empty())
+                                      ? 0UL
+                                      : static_cast<unsigned long>((*dimCells)[0]));
+  if (!initialized_ || renderKey == lastRenderKey_ || columns == 0 || rows == 0) {
+    return;
+  }
+
+  lastRenderKey_ = renderKey;
+
+  const int scale = 1;
+  const int virtualWidth = logicalWidth();
+  const int virtualHeight = logicalHeight();
+  const int cellSize =
+      std::max(1, std::min(virtualWidth / static_cast<int>(columns),
+                           virtualHeight / static_cast<int>(rows)));
+  const int renderWidth = std::min(virtualWidth, static_cast<int>(columns) * cellSize);
+  const int renderHeight = std::min(virtualHeight, static_cast<int>(rows) * cellSize);
+  const int xOffset = std::max(0, (virtualWidth - renderWidth) / 2);
+  const int yOffset = std::max(0, (virtualHeight - renderHeight) / 2);
+  const uint16_t lifeColor = panelColor(wordColor());
+  const uint16_t dimLifeColor = panelColor(blendOverBackground(wordColor(), nightMode_ ? 82 : 96));
+
+  clearVirtualBuffer(virtualWidth, virtualHeight);
+  auto drawPackedCells = [&](const std::vector<uint32_t> &source, uint16_t color) {
+    for (int y = 0; y < static_cast<int>(rows); ++y) {
+      const int dstY = yOffset + y * cellSize;
+      if (dstY >= yOffset + renderHeight) {
+        break;
+      }
+      for (int x = 0; x < static_cast<int>(columns); ++x) {
+        const int dstX = xOffset + x * cellSize;
+        if (dstX >= xOffset + renderWidth) {
+          break;
+        }
+        const size_t index = static_cast<size_t>(y) * columns + static_cast<size_t>(x);
+        if (!packedLifeCellAlive(source, index)) {
+          continue;
+        }
+
+        const int blockWidth = std::min(cellSize, xOffset + renderWidth - dstX);
+        const int blockHeight = std::min(cellSize, yOffset + renderHeight - dstY);
+        for (int blockY = 0; blockY < blockHeight; ++blockY) {
+          uint16_t *row = virtualFrame_ + (dstY + blockY) * kVirtualBufferWidth + dstX;
+          std::fill_n(row, blockWidth, color);
+        }
+      }
+    }
+  };
+
+  if (dimCells != nullptr) {
+    drawPackedCells(*dimCells, dimLifeColor);
+  }
+  drawPackedCells(cells, lifeColor);
+
   flushScaledFrame(scale, virtualWidth, virtualHeight);
 }
 

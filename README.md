@@ -2,7 +2,7 @@
 
 RSVP Nano is an open-source ESP32-S3 reading device that shows text one word at a time using RSVP, Rapid Serial Visual Presentation. It is designed for small screens, SD card libraries, fast reading, and a simple browser-first workflow for converting and uploading books.
 
-This README is written for the current release, `v0.0.4`.
+This README is written for the current release, `v0.0.5`.
 
 ## What You Need
 
@@ -28,7 +28,7 @@ Use the hosted flasher:
 
 Open it in Chrome or Edge on desktop, connect the device over USB, and follow the installer prompts. The flasher uses ESP Web Tools and Web Serial, so it must run from HTTPS or localhost.
 
-The hosted flasher installs the latest published GitHub Release. For `v0.0.4`, that means the release build includes the firmware, SD card, RSS, companion sync, web companion, and settings work described below.
+The hosted flasher installs the latest published GitHub Release. For `v0.0.5`, that means the release build includes the firmware, SD card, RSS, companion sync, web companion, and settings work described below.
 
 ## Prepare The SD Card
 
@@ -46,7 +46,7 @@ Create these folders on the card:
 /config
 ```
 
-Books go in `/books/books`. Articles go in `/books/articles`. Older libraries with files directly inside `/books` are still read for compatibility, but the split folders are the recommended layout for `v0.0.4`.
+Books go in `/books/books`. Articles go in `/books/articles`. Older libraries with files directly inside `/books` are still read for compatibility, but the split folders are the recommended layout for `v0.0.5`.
 
 If the device cannot see the SD card, the most common causes are:
 
@@ -87,6 +87,10 @@ Use this layout:
 /books/books/my-book.rsvp
 /books/articles/my-article.rsvp
 ```
+
+On first open, the firmware may create `.ridx` and `.rdat` sidecar files next to a book. These are the SD-backed word index and normalized word data used for long books. Leave them on the card; they are rebuilt automatically if the source book changes.
+
+Large books now load through the same indexed reading path as smaller books, with progress messages while indexes and time estimates are prepared. If a book cannot be prepared, the device should return to the menu with a readable reason instead of silently failing.
 
 ### Option 2: USB Transfer Mode
 
@@ -143,7 +147,7 @@ You can set Wi-Fi credentials from:
 
 RSS feeds are managed from the web companion or the iPhone app, then checked from the device menu with `RSS feeds`. New articles are saved into `/books/articles`.
 
-RSS support in `v0.0.4` includes:
+RSS support in `v0.0.5` includes:
 
 - RSS and Atom feed parsing.
 - Redirect handling for common `301`, `302`, `303`, `307`, and `308` responses.
@@ -167,6 +171,7 @@ OTA updates use GitHub Releases. Open `Settings -> Firmware update` on the devic
 - `PWR` hold from the normal reader or main menu: power off.
 - `BOOT` short press: cycle brightness.
 - `BOOT` hold: cycle display theme.
+- Press `PWR` + `BOOT` together: enter standby. Press either button to wake after the short standby grace period.
 
 The goal is simple: use `PWR` as menu, back, exit, and power. Use `BOOT` for quick display changes.
 
@@ -183,6 +188,7 @@ The goal is simple: use `PWR` as menu, back, exit, and power. Use `BOOT` for qui
 - Swipe up while paused: increase WPM.
 - Swipe down while paused: decrease WPM.
 - Tap the bottom-right footer label: switch between progress, chapter time remaining, book time remaining, and battery display modes.
+- Tap the top-right battery label: switch between percentage, time remaining, and voltage.
 
 Pause behavior is configurable. In `Settings -> Word pacing`, choose whether taps pause instantly or at the end of the sentence.
 
@@ -229,6 +235,8 @@ Settings are grouped by how people actually use the device.
 - Display theme.
 - Brightness.
 - Footer and battery label behavior.
+- Optional battery, chapter, and book percentage labels while actively reading.
+- Standby display mode: Life, Maze, Voronoi, or Screen off.
 - Language.
 
 `Typography` includes:
@@ -249,6 +257,7 @@ Settings are grouped by how people actually use the device.
 - Complexity delay.
 - Punctuation delay.
 - RSVP or scroll reading behavior.
+- Reading speeds from 10 WPM upward, with 10 WPM steps below 100 WPM.
 - Instant pause or sentence-end pause.
 - Pacing reset.
 
@@ -285,6 +294,10 @@ Use the web companion or iPhone app to manage feed URLs. Then run `RSS feeds` fr
 
 The device shows live progress as it checks feeds. Saved articles appear in `Articles`.
 
+If a feed cannot be downloaded, the reader shows a plain-English reason such as `Feed not found`, `Site blocked reader`, or `Site took too long`.
+
+RSS checks can continue in the background, while installable firmware updates still ask for confirmation before the device changes itself.
+
 ### Focus Timer
 
 The Focus Timer uses the device orientation to guide work and break blocks.
@@ -301,9 +314,11 @@ Touch-and-hold during an active timer cancels the current timer block.
 
 Run `SD card check` if books or articles do not appear. It checks whether the card mounts, whether it can write, and whether the expected library folders exist.
 
+If the old folder layout needs repair, the device now asks before changing the card.
+
 ## Character Support
 
-`v0.0.4` improves support for long books and unsupported characters. Common punctuation is normalized, and many accented Latin characters render directly or fall back to readable plain Latin equivalents.
+`v0.0.5` improves support for long books and unsupported characters. Common punctuation is normalized, ellipses and hyphenated sentence breaks are handled more carefully, and many accented Latin characters render directly or fall back to readable plain Latin equivalents.
 
 The current renderer is best for English and European Latin-script languages. Complex scripts still need additional font and shaping work.
 
@@ -362,7 +377,7 @@ Open the Xcode project from that folder when installing the app locally.
 To export browser-flasher and OTA firmware assets for a release:
 
 ```bash
-python3 tools/export_web_firmware.py --version v0.0.4
+python3 tools/export_web_firmware.py --version v0.0.5
 ```
 
 That writes:
@@ -375,7 +390,7 @@ web/firmware/manifest.json
 
 ## Project Status
 
-`v0.0.4` is the first release that brings the firmware, SD card workflow, RSS feeds, iPhone companion work, and web companion work together into one release-ready experience.
+`v0.0.5` builds on the first public firmware release with the long-book reading system, safer SD-card handling, clearer RSS and loading feedback, improved Latin-script support, reader chrome toggles, battery protection, and standby display options.
 
 The next areas of work are:
 

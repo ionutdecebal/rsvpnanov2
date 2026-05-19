@@ -99,9 +99,11 @@ constexpr const char *kDemoWords[] = {
 };
 
 constexpr size_t kDemoWordCount = sizeof(kDemoWords) / sizeof(kDemoWords[0]);
-constexpr uint16_t kMinWpm = 100;
+constexpr uint16_t kMinWpm = 10;
+constexpr uint16_t kLowWpmMax = 100;
+constexpr uint16_t kLowWpmStep = 10;
 constexpr uint16_t kMaxWpm = 1000;
-constexpr uint16_t kWpmStep = 25;
+constexpr uint16_t kHighWpmStep = 25;
 constexpr uint8_t kLongWordAfterChars = 6;
 constexpr uint8_t kLongWordPercentPerChar = 6;
 constexpr uint8_t kVeryLongWordAfterChars = 10;
@@ -566,7 +568,24 @@ void ReadingLoop::begin(uint32_t nowMs) {
 }
 
 void ReadingLoop::setWords(std::vector<String> words, uint32_t nowMs) {
+  wordSource_ = nullptr;
   loadedWords_ = std::move(words);
+  currentIndex_ = 0;
+  lastAdvanceMs_ = nowMs;
+  setCurrentWordFromIndex();
+}
+
+void ReadingLoop::setWordSource(BookWordSource *source, uint32_t nowMs) {
+  loadedWords_.clear();
+  wordSource_ = source;
+  currentIndex_ = 0;
+  lastAdvanceMs_ = nowMs;
+  setCurrentWordFromIndex();
+}
+
+void ReadingLoop::clearLoadedBook(uint32_t nowMs) {
+  wordSource_ = nullptr;
+  loadedWords_.clear();
   currentIndex_ = 0;
   lastAdvanceMs_ = nowMs;
   setCurrentWordFromIndex();
@@ -605,11 +624,9 @@ uint32_t ReadingLoop::wordIntervalMs() const { return 60000UL / wpm_; }
 uint32_t ReadingLoop::currentWordDurationMs() const {
   bool nextWordStartsLowercase = false;
   const size_t nextIndex = currentIndex_ + 1;
-  if (!loadedWords_.empty()) {
-    if (nextIndex < loadedWords_.size()) {
-      nextWordStartsLowercase = startsWithLowercaseLetter(loadedWords_[nextIndex]);
-    }
-  } else if (nextIndex < kDemoWordCount) {
+  if (nextIndex < wordCount()) {
+    nextWordStartsLowercase = startsWithLowercaseLetter(wordAt(nextIndex));
+  } else if (!usingLoadedBook() && nextIndex < kDemoWordCount) {
     nextWordStartsLowercase = startsWithLowercaseLetter(String(kDemoWords[nextIndex]));
   }
 
@@ -712,7 +729,19 @@ void ReadingLoop::adjustWpm(int delta) {
   }
 
   int nextWpm = static_cast<int>(wpm_);
-  nextWpm += (delta > 0) ? kWpmStep : -static_cast<int>(kWpmStep);
+  if (delta > 0) {
+    nextWpm += nextWpm < static_cast<int>(kLowWpmMax) ? kLowWpmStep : kHighWpmStep;
+    if (nextWpm > static_cast<int>(kLowWpmMax) &&
+        wpm_ < static_cast<uint16_t>(kLowWpmMax)) {
+      nextWpm = kLowWpmMax;
+    }
+  } else {
+    nextWpm -= nextWpm <= static_cast<int>(kLowWpmMax) ? kLowWpmStep : kHighWpmStep;
+    if (nextWpm < static_cast<int>(kLowWpmMax) &&
+        wpm_ > static_cast<uint16_t>(kLowWpmMax)) {
+      nextWpm = kLowWpmMax;
+    }
+  }
   if (nextWpm < static_cast<int>(kMinWpm)) {
     nextWpm = kMinWpm;
   }
@@ -775,10 +804,16 @@ void ReadingLoop::setCurrentWordFromIndex() {
     return;
   }
 
+  if (wordSource_ != nullptr) {
+    wordSource_->prefetchAround(currentIndex_);
+  }
   currentWord_ = wordAt(currentIndex_);
 }
 
 size_t ReadingLoop::wordCount() const {
+  if (wordSource_ != nullptr) {
+    return wordSource_->wordCount();
+  }
   if (!loadedWords_.empty()) {
     return loadedWords_.size();
   }
@@ -786,13 +821,18 @@ size_t ReadingLoop::wordCount() const {
 }
 
 String ReadingLoop::wordAt(size_t index) const {
+  if (wordSource_ != nullptr) {
+    return wordSource_->wordAt(index);
+  }
   if (!loadedWords_.empty()) {
     return loadedWords_[index];
   }
   return String(kDemoWords[index]);
 }
 
-bool ReadingLoop::usingLoadedBook() const { return !loadedWords_.empty(); }
+bool ReadingLoop::usingLoadedBook() const {
+  return wordSource_ != nullptr || !loadedWords_.empty();
+}
 
 bool ReadingLoop::nextWordStartsLowercaseAt(size_t wordIndex) const {
   const size_t nextIndex = wordIndex + 1;

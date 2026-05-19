@@ -2,6 +2,9 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 #include <vector>
 
 #include "app/AppState.h"
@@ -36,6 +39,23 @@ class App {
   void update(uint32_t nowMs);
 
  private:
+  static constexpr size_t kOtaVersionLabelMax = 32;
+  static constexpr size_t kOtaSummaryLabelMax = 40;
+  static constexpr size_t kOtaDetailLabelMax = 96;
+
+  struct OtaCheckResult {
+    OtaUpdater::ResultCode code = OtaUpdater::ResultCode::MetadataFailed;
+    char currentVersion[kOtaVersionLabelMax] = {};
+    char latestVersion[kOtaVersionLabelMax] = {};
+    char summary[kOtaSummaryLabelMax] = {};
+    char detail[kOtaDetailLabelMax] = {};
+  };
+
+  struct OtaCheckTaskParams {
+    OtaUpdater::Config config;
+    QueueHandle_t resultQueue = nullptr;
+  };
+
   struct PausedTouchSession {
     bool active = false;
     uint16_t startX = 0;
@@ -69,6 +89,8 @@ class App {
     BookPicker,
     ChapterPicker,
     RestartConfirm,
+    SdCardRepairConfirm,
+    UpdateConfirm,
     FocusTimerGenres,
     FocusTimerSession,
   };
@@ -82,6 +104,14 @@ class App {
   enum class BatteryLabelMode : uint8_t {
     Percent = 0,
     TimeRemaining = 1,
+    Voltage = 2,
+  };
+
+  enum class ScreensaverMode : uint8_t {
+    Life = 0,
+    Maze = 2,
+    Voronoi = 3,
+    ScreenOff = 6,
   };
 
   enum class PauseMode : uint8_t {
@@ -148,6 +178,7 @@ class App {
   void maybeSaveReadingPosition(uint32_t nowMs);
   void handleBootButton(uint32_t nowMs);
   void handlePowerButton(uint32_t nowMs);
+  bool handleStandbyCombo(uint32_t nowMs);
   void toggleMenuFromPowerButton(uint32_t nowMs);
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness();
@@ -162,6 +193,9 @@ class App {
   void applyTypographySettings(uint32_t nowMs, bool rerender = true);
   uint8_t currentBrightnessPercent() const;
   bool updateBatteryStatus(uint32_t nowMs, bool force = false);
+  void handleBatteryProtection(uint32_t nowMs);
+  void showLowBatteryWarning(uint32_t nowMs);
+  void updateBatteryWarningOverlay(uint32_t nowMs);
   void handleTouch(uint32_t nowMs);
   void applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs);
   void handleReaderTap(uint16_t x, uint16_t y, uint32_t nowMs);
@@ -175,7 +209,11 @@ class App {
   bool isFooterMetricTap(uint16_t x, uint16_t y) const;
   bool isBatteryBadgeTap(uint16_t x, uint16_t y) const;
   bool isPreviousSentenceTap(uint16_t x, uint16_t y) const;
+  bool isActivelyReading() const;
   bool readerFooterVisible() const;
+  DisplayManager::ReaderChrome readerChrome() const;
+  String readerFooterStatusLabel() const;
+  String onOffLabel(bool enabled) const;
   int scrubStepsForDrag(int deltaX) const;
   void applyScrubTarget(int targetSteps, uint32_t nowMs);
   int browseScrollRatePermille(uint16_t y) const;
@@ -200,6 +238,12 @@ class App {
   void rebuildSettingsMenuItems();
   void applyPacingSettings();
   void maybeAutoCheckForUpdates(uint32_t nowMs);
+  bool startBackgroundOtaCheck(const OtaUpdater::Config &config);
+  static void otaCheckTask(void *params);
+  void pollOtaCheckResult(uint32_t nowMs);
+  void maybeOpenUpdateConfirm(uint32_t nowMs);
+  bool updateConfirmCanOpen() const;
+  bool blockNetworkActionForOtaCheck(const String &title, uint32_t nowMs);
   void runFirmwareUpdate(const OtaUpdater::Config &config, bool automatic, uint32_t nowMs);
   void runRssFeedCheck(uint32_t nowMs);
   OtaUpdater::Config preferredOtaConfig();
@@ -238,13 +282,31 @@ class App {
   void selectChapterPickerItem(uint32_t nowMs);
   void openRestartConfirm();
   void selectRestartConfirmItem(uint32_t nowMs);
+  void openSdCardRepairConfirm();
+  void selectSdCardRepairConfirmItem(uint32_t nowMs);
+  void runSdCardRepair(uint32_t nowMs);
   void runSdCardCheck(uint32_t nowMs);
+  void openUpdateConfirm();
+  void selectUpdateConfirmItem(uint32_t nowMs);
   void enterCompanionSync(uint32_t nowMs);
   void updateCompanionSync(uint32_t nowMs);
   void exitCompanionSync(uint32_t nowMs);
   void enterUsbTransfer(uint32_t nowMs);
   void updateUsbTransfer(uint32_t nowMs);
   void exitUsbTransfer(uint32_t nowMs);
+  void enterStandby(uint32_t nowMs);
+  void exitStandby(uint32_t nowMs);
+  void seedStandbyScreensaver(uint32_t nowMs);
+  void stepStandbyScreensaver(uint32_t nowMs);
+  void seedStandbyLife(uint32_t nowMs);
+  void stepStandbyLife();
+  void seedStandbyMaze(uint32_t nowMs);
+  void stepStandbyMaze();
+  void seedStandbyVoronoi(uint32_t nowMs);
+  void stepStandbyVoronoi();
+  void renderStandbyVoronoi();
+  void seedStandbyScreenOff(uint32_t nowMs);
+  void updateStandbyScreensaver(uint32_t nowMs, bool force = false);
   void enterPowerOff(uint32_t nowMs);
   void enterSleep(uint32_t nowMs);
   void wakeFromSleep();
@@ -252,7 +314,9 @@ class App {
   bool prepareBootBookLoad();
   void loadPendingBootBook(uint32_t nowMs);
   void saveReadingPosition(bool force = false);
-  bool loadBookAtIndex(size_t index, uint32_t nowMs, bool allowLegacyPositionFallback = false);
+  bool loadBookAtIndex(size_t index, uint32_t nowMs, bool allowLegacyPositionFallback = false,
+                       bool allowIndexBuild = true, bool allowEpubConversion = true,
+                       bool rebuildTimeEstimate = true);
   String bookPositionKey(const String &bookPath) const;
   String bookWordCountKey(const String &bookPath) const;
   String bookRecentKey(const String &bookPath) const;
@@ -269,9 +333,15 @@ class App {
   void renderBookPicker();
   void renderChapterPicker();
   void renderRestartConfirm();
+  void renderSdCardRepairConfirm();
+  void renderUpdateConfirm();
   void renderFocusTimerGenres();
   void renderFocusTimerSession();
   void renderActiveReader(uint32_t nowMs);
+  bool updateChapterTransition(uint32_t nowMs);
+  bool maybeStartChapterTransition(size_t previousWordIndex, size_t currentWordIndex,
+                                   uint32_t nowMs);
+  void renderChapterTransition();
   void renderScrollReader(uint32_t nowMs, const String &overlayText = "");
   DisplayManager::LibraryItem libraryItemForBook(size_t bookIndex);
   String chapterMenuLabel(size_t chapterIndex) const;
@@ -281,15 +351,23 @@ class App {
   String currentBatteryLabel() const;
   String footerMetricModeLabel() const;
   String batteryLabelModeLabel() const;
+  String screensaverModeLabel() const;
   String batteryTimeRemainingLabel() const;
+  String batteryVoltageLabel() const;
   String formatBatteryTimeRemaining(uint32_t minutes) const;
   uint32_t estimatedReadingTimeRemainingMs(size_t startIndex, size_t endIndex) const;
+  uint32_t estimatedPacingBonusMs(size_t startIndex, size_t endIndex) const;
   void rebuildTimeEstimateCache();
   void invalidateTimeEstimateCache();
   void flushPendingTimeEstimateRebuild();
+  void cancelTimeEstimateBuild();
+  void updateTimeEstimateBuild(uint32_t nowMs);
+  bool timeEstimateBuildMatchesCurrentBook() const;
   String formatReadingTimeRemaining(uint32_t remainingMs) const;
   String timeEstimateModeLabel() const;
   uint8_t readingProgressPercent() const;
+  bool ensureCurrentBookWordAvailable(uint32_t nowMs);
+  void handleCurrentBookReadFailure(uint32_t nowMs, const char *detail);
   void renderReaderWord();
   void renderContextPreview();
   void renderWpmFeedback(uint32_t nowMs);
@@ -325,6 +403,7 @@ class App {
   void playFocusTimerCompletionCue();
 
   AppState state_ = AppState::Booting;
+  AppState standbyReturnState_ = AppState::Paused;
   DisplayManager display_;
   AudioManager audio_;
   FocusTimer focusTimer_;
@@ -333,6 +412,7 @@ class App {
   ButtonHandler powerButton_;
   TouchHandler touch_;
   StorageManager storage_;
+  IndexedBookStore activeBookStore_;
   OtaUpdater otaUpdater_;
   RssFeedManager rssFeedManager_;
   CompanionSyncManager companionSync_;
@@ -350,6 +430,14 @@ class App {
   uint32_t lastScrollAnimationRenderMs_ = 0;
   uint32_t lastCompanionSyncRenderMs_ = 0;
   uint32_t lastReaderTapMs_ = 0;
+  uint32_t standbyComboStartedMs_ = 0;
+  uint32_t standbyEnteredMs_ = 0;
+  uint32_t lastStandbyFrameMs_ = 0;
+  uint32_t standbyLifeGeneration_ = 0;
+  uint32_t standbyScreensaverRng_ = 1;
+  uint32_t chapterTransitionUntilMs_ = 0;
+  uint32_t lastLowBatteryWarningMs_ = 0;
+  uint32_t batteryWarningRestoreAtMs_ = 0;
   size_t lastSavedWordIndex_ = static_cast<size_t>(-1);
   size_t contextPreviewStartIndex_ = 0;
   size_t contextPreviewCurrentLocalIndex_ = static_cast<size_t>(-1);
@@ -360,7 +448,10 @@ class App {
   size_t wifiNetworkSelectedIndex_ = 0;
   size_t bookPickerSelectedIndex_ = 0;
   size_t chapterPickerSelectedIndex_ = 0;
+  size_t chapterTransitionIndex_ = static_cast<size_t>(-1);
   size_t restartConfirmSelectedIndex_ = 0;
+  size_t sdCardRepairConfirmSelectedIndex_ = 0;
+  size_t updateConfirmSelectedIndex_ = 0;
   size_t focusTimerGenreSelectedIndex_ = 0;
   uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
@@ -371,6 +462,7 @@ class App {
   size_t typographyPreviewSampleIndex_ = 0;
   MenuScreen menuScreen_ = MenuScreen::Main;
   MenuScreen restartConfirmReturnScreen_ = MenuScreen::Main;
+  QueueHandle_t otaCheckQueue_ = nullptr;
   std::vector<String> settingsMenuItems_;
   std::vector<String> focusTimerGenreMenuItems_;
   std::vector<DisplayManager::LibraryItem> wifiNetworkMenuItems_;
@@ -379,15 +471,34 @@ class App {
   std::vector<String> chapterMenuItems_;
   std::vector<ChapterMarker> chapterMarkers_;
   std::vector<size_t> paragraphStarts_;
-  std::vector<uint32_t> wordBonusPrefixSumMs_;
+  std::vector<uint32_t> wordBonusBlockPrefixSumMs_;
+  String timeEstimateBuildBookPath_;
+  size_t timeEstimateBuildWordCount_ = 0;
+  size_t timeEstimateBuildBlockCount_ = 0;
+  size_t timeEstimateBuildNextBlock_ = 0;
+  uint32_t timeEstimateBuildRunningMs_ = 0;
+  uint32_t timeEstimateBuildStartedMs_ = 0;
+  uint32_t timeEstimateBuildLastLogMs_ = 0;
   bool timeEstimateCacheValid_ = false;
+  bool timeEstimateBuildInProgress_ = false;
   bool accurateTimeEstimateEnabled_ = true;
   bool pacingCacheDirty_ = false;
   std::vector<DisplayManager::ContextWord> contextPreviewWords_;
   std::vector<WifiNetworkInfo> wifiNetworks_;
   std::vector<TextEntryButton> textEntryButtons_;
+  std::vector<uint32_t> standbyLifeCells_;
+  std::vector<uint32_t> standbyLifeNextCells_;
+  std::vector<uint32_t> standbyScreensaverDimCells_;
+  std::vector<uint8_t> standbyMazeVisited_;
+  std::vector<uint16_t> standbyMazeStack_;
+  std::vector<int16_t> standbyVoronoiX_;
+  std::vector<int16_t> standbyVoronoiY_;
+  std::vector<int16_t> standbyVoronoiDx_;
+  std::vector<int16_t> standbyVoronoiDy_;
   String currentBookPath_;
   String currentBookTitle_;
+  String pendingUpdateCurrentVersion_;
+  String pendingUpdateNewVersion_;
   String batteryLabel_;
   float batteryFilteredVoltage_ = 0.0f;
   float batteryFilteredPercent_ = 0.0f;
@@ -407,7 +518,15 @@ class App {
   bool powerButtonReleasedSinceBoot_ = false;
   bool powerButtonLongPressHandled_ = false;
   bool powerOffStarted_ = false;
+  bool standbyComboActive_ = false;
+  bool standbyComboHandled_ = false;
+  bool standbyButtonsReleased_ = false;
+  bool standbyScreenOffActive_ = false;
+  bool chapterTransitionVisible_ = false;
+  bool batteryWarningOverlayVisible_ = false;
   bool focusTimerCancelHoldTriggered_ = false;
+  bool otaCheckInProgress_ = false;
+  bool otaUpdatePromptPending_ = false;
   bool contextViewVisible_ = false;
   bool contextPreviewWindowValid_ = false;
   bool wpmFeedbackVisible_ = false;
@@ -418,9 +537,14 @@ class App {
   bool batteryPresent_ = false;
   bool batterySampleInitialized_ = false;
   bool batteryRuntimeEstimateReady_ = false;
+  uint8_t batteryCriticalSampleCount_ = 0;
   bool phantomWordsEnabled_ = true;
+  bool readerBatteryVisibleWhilePlaying_ = true;
+  bool readerChapterVisibleWhilePlaying_ = false;
+  bool readerProgressVisibleWhilePlaying_ = false;
   FooterMetricMode footerMetricMode_ = FooterMetricMode::Percentage;
   BatteryLabelMode batteryLabelMode_ = BatteryLabelMode::Percent;
+  ScreensaverMode screensaverMode_ = ScreensaverMode::Life;
   PauseMode pauseMode_ = PauseMode::SentenceEnd;
   bool darkMode_ = true;
   bool nightMode_ = false;

@@ -1,0 +1,88 @@
+name: Release firmware
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to build, for example v0.0.5"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  pages: write
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set release version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Export firmware assets
+        run: python3 tools/export_web_firmware.py --version "${{ steps.version.outputs.value }}"
+
+      - name: Write release notes
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.value }}
+        run: |
+          NOTES_PATH="docs/releases/${RELEASE_TAG}.md"
+          if [ -f "$NOTES_PATH" ]; then
+            cp "$NOTES_PATH" release-notes.md
+          else
+            cat > release-notes.md <<'NOTES'
+          RSVP Nano firmware release.
+
+          Assets:
+          - `rsvp-nano.bin` is the full browser-flasher image for fresh installs.
+          - `rsvp-nano-ota.bin` is the app-only binary used by OTA updates.
+          NOTES
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.value }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              web/firmware/rsvp-nano.bin \
+              web/firmware/rsvp-nano-ota.bin \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              web/firmware/rsvp-nano.bin \
+              web/firmware/rsvp-nano-ota.bin \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

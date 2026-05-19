@@ -443,6 +443,40 @@ char entityPunctuationChar(uint32_t codepoint) {
   }
 }
 
+bool parseNumericEntityCodepoint(const String &entity, uint32_t &value) {
+  if (!entity.startsWith("#")) {
+    return false;
+  }
+
+  value = 0;
+  int start = 1;
+  int base = 10;
+  if (entity.length() > 2 && (entity[1] == 'x' || entity[1] == 'X')) {
+    start = 2;
+    base = 16;
+  }
+  if (static_cast<size_t>(start) >= entity.length()) {
+    return false;
+  }
+
+  for (size_t i = start; i < entity.length(); ++i) {
+    const int digit = base == 16 ? hexValue(entity[i]) : (entity[i] >= '0' && entity[i] <= '9'
+                                                             ? entity[i] - '0'
+                                                             : -1);
+    if (digit < 0 || digit >= base) {
+      return false;
+    }
+    value = value * base + static_cast<uint32_t>(digit);
+  }
+
+  return true;
+}
+
+bool isSentenceDashCodepoint(uint32_t codepoint) {
+  return codepoint == 0x2012 || codepoint == 0x2013 || codepoint == 0x2014 ||
+         codepoint == 0x2015;
+}
+
 char decodedEntityChar(const String &entity) {
   if (entity == "amp") {
     return '&';
@@ -461,6 +495,12 @@ char decodedEntityChar(const String &entity) {
   }
   if (entity == "nbsp") {
     return ' ';
+  }
+  if (entity == "iexcl") {
+    return static_cast<char>(0x16);
+  }
+  if (entity == "iquest") {
+    return static_cast<char>(0x17);
   }
   if (entity == "ldquo" || entity == "rdquo" || entity == "bdquo") {
     return '"';
@@ -503,6 +543,39 @@ char decodedEntityChar(const String &entity) {
   }
   if (entity == "middot" || entity == "bull") {
     return '*';
+  }
+  struct NamedLatin1Entity {
+    const char *name;
+    uint8_t value;
+  };
+  static constexpr NamedLatin1Entity kLatin1Entities[] = {
+      {"Agrave", 0xC0}, {"Aacute", 0xC1}, {"Acirc", 0xC2},  {"Atilde", 0xC3},
+      {"Auml", 0xC4},   {"Aring", 0xC5},  {"AElig", 0xC6},  {"Ccedil", 0xC7},
+      {"Egrave", 0xC8}, {"Eacute", 0xC9}, {"Ecirc", 0xCA},  {"Euml", 0xCB},
+      {"Igrave", 0xCC}, {"Iacute", 0xCD}, {"Icirc", 0xCE},  {"Iuml", 0xCF},
+      {"ETH", 0xD0},    {"Ntilde", 0xD1}, {"Ograve", 0xD2}, {"Oacute", 0xD3},
+      {"Ocirc", 0xD4},  {"Otilde", 0xD5}, {"Ouml", 0xD6},   {"Oslash", 0xD8},
+      {"Ugrave", 0xD9}, {"Uacute", 0xDA}, {"Ucirc", 0xDB},  {"Uuml", 0xDC},
+      {"Yacute", 0xDD}, {"THORN", 0xDE},  {"szlig", 0xDF},  {"agrave", 0xE0},
+      {"aacute", 0xE1}, {"acirc", 0xE2},  {"atilde", 0xE3}, {"auml", 0xE4},
+      {"aring", 0xE5},  {"aelig", 0xE6},  {"ccedil", 0xE7}, {"egrave", 0xE8},
+      {"eacute", 0xE9}, {"ecirc", 0xEA},  {"euml", 0xEB},   {"igrave", 0xEC},
+      {"iacute", 0xED}, {"icirc", 0xEE},  {"iuml", 0xEF},   {"eth", 0xF0},
+      {"ntilde", 0xF1}, {"ograve", 0xF2}, {"oacute", 0xF3}, {"ocirc", 0xF4},
+      {"otilde", 0xF5}, {"ouml", 0xF6},   {"oslash", 0xF8}, {"ugrave", 0xF9},
+      {"uacute", 0xFA}, {"ucirc", 0xFB},  {"uuml", 0xFC},   {"yacute", 0xFD},
+      {"thorn", 0xFE},  {"yuml", 0xFF},
+  };
+  for (const NamedLatin1Entity &entry : kLatin1Entities) {
+    if (entity == entry.name) {
+      return static_cast<char>(entry.value);
+    }
+  }
+  if (entity == "times") {
+    return 'x';
+  }
+  if (entity == "divide") {
+    return '/';
   }
   if (entity == "AElig") {
     return static_cast<char>(0xC6);
@@ -718,25 +791,8 @@ char decodedEntityChar(const String &entity) {
     return static_cast<char>(0xF7);
   }
 
-  if (entity.startsWith("#")) {
-    uint32_t value = 0;
-    int start = 1;
-    int base = 10;
-    if (entity.length() > 2 && (entity[1] == 'x' || entity[1] == 'X')) {
-      start = 2;
-      base = 16;
-    }
-
-    for (size_t i = start; i < entity.length(); ++i) {
-      const int digit = base == 16 ? hexValue(entity[i]) : (entity[i] >= '0' && entity[i] <= '9'
-                                                               ? entity[i] - '0'
-                                                               : -1);
-      if (digit < 0 || digit >= base) {
-        return ' ';
-      }
-      value = value * base + static_cast<uint32_t>(digit);
-    }
-
+  uint32_t value = 0;
+  if (parseNumericEntityCodepoint(entity, value)) {
     const char mapped = entityCodepointByte(value);
     if (mapped != ' ') {
       return mapped;
@@ -748,6 +804,29 @@ char decodedEntityChar(const String &entity) {
   }
 
   return ' ';
+}
+
+String decodedEntityText(const String &entity) {
+  if (entity == "ndash" || entity == "mdash") {
+    return " - ";
+  }
+  if (entity == "hellip") {
+    return "...";
+  }
+
+  uint32_t value = 0;
+  if (parseNumericEntityCodepoint(entity, value)) {
+    if (isSentenceDashCodepoint(value)) {
+      return " - ";
+    }
+    if (value == 0x2026) {
+      return "...";
+    }
+  }
+
+  String decoded;
+  decoded += decodedEntityChar(entity);
+  return decoded;
 }
 
 bool isUtf8Continuation(uint8_t value) { return (value & 0xC0) == 0x80; }
@@ -831,11 +910,13 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
   switch (codepoint) {
     case 0x2010:
     case 0x2011:
+      target += '-';
+      return;
     case 0x2012:
     case 0x2013:
     case 0x2014:
     case 0x2015:
-      target += '-';
+      target += " - ";
       return;
     case 0x2018:
     case 0x2019:
@@ -848,7 +929,7 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
       target += '"';
       return;
     case 0x2026:
-      target += '.';
+      target += "...";
       return;
     case 0x2032:
       target += '\'';
@@ -889,7 +970,8 @@ String normalizeDisplayText(const String &text) {
   bool previousSpace = true;
   for (size_t i = 0; i < normalized.length(); ++i) {
     const uint8_t value = LatinText::byteValue(normalized[i]);
-    if (value <= ' ' && !LatinText::isWordCharacter(value)) {
+    if (value <= ' ' && !LatinText::isWordCharacter(value) &&
+        !LatinText::isLowCustomSlotByte(value)) {
       if (!previousSpace) {
         collapsed += ' ';
         previousSpace = true;
@@ -941,7 +1023,10 @@ String plainTextFromXmlFragment(const String &fragment) {
     if (c == '&') {
       const int entityEnd = fragment.indexOf(';', i + 1);
       if (entityEnd > 0 && entityEnd - static_cast<int>(i) <= 12) {
-        appendNormalizedChar(text, decodedEntityChar(fragment.substring(i + 1, entityEnd)));
+        const String decoded = decodedEntityText(fragment.substring(i + 1, entityEnd));
+        for (size_t decodedIndex = 0; decodedIndex < decoded.length(); ++decodedIndex) {
+          appendNormalizedChar(text, decoded[decodedIndex]);
+        }
         i = entityEnd;
         continue;
       }
@@ -962,6 +1047,49 @@ bool hasReadableText(const String &token) {
     }
   }
   return false;
+}
+
+bool isReadableTextChar(char c) {
+  const uint8_t value = static_cast<uint8_t>(c);
+  return std::isalnum(value) != 0 || value >= 0x80;
+}
+
+bool isInlineWordHyphen(const String &text, size_t index) {
+  if (index == 0 || index + 1 >= text.length() || text[index] != '-') {
+    return false;
+  }
+  if (text[index - 1] == '-' || text[index + 1] == '-') {
+    return false;
+  }
+  return isReadableTextChar(text[index - 1]) && isReadableTextChar(text[index + 1]);
+}
+
+bool isHyphenToken(const String &token) {
+  if (token.isEmpty()) {
+    return false;
+  }
+  for (size_t i = 0; i < token.length(); ++i) {
+    if (token[i] != '-') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isEllipsisToken(const String &token) {
+  if (token.length() < 3) {
+    return false;
+  }
+  for (size_t i = 0; i < token.length(); ++i) {
+    if (token[i] != '.') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool hasReadableOrRhythmText(const String &token) {
+  return hasReadableText(token) || isHyphenToken(token);
 }
 
 bool writeBodyLine(File &output, const String &line, size_t &wordCount, size_t maxWords);
@@ -1000,7 +1128,10 @@ bool flushWordAlignedPrefix(File &output, String &line, size_t &wordCount, size_
 bool writeBodyLine(File &output, const String &line, size_t &wordCount, size_t maxWords) {
   const String normalizedLine = normalizeDisplayText(line);
   String token;
+  String pendingToken;
   String outputLine;
+  token.reserve(32);
+  pendingToken.reserve(32);
 
   auto flushOutputLine = [&]() {
     if (outputLine.isEmpty()) {
@@ -1013,38 +1144,117 @@ bool writeBodyLine(File &output, const String &line, size_t &wordCount, size_t m
     outputLine = "";
   };
 
-  for (size_t i = 0; i <= normalizedLine.length(); ++i) {
+  auto writeToken = [&](const String &value) -> bool {
+    if (value.isEmpty() || !hasReadableOrRhythmText(value)) {
+      return true;
+    }
+
+    if (reachedWordLimit(wordCount, maxWords)) {
+      flushOutputLine();
+      return false;
+    }
+
+    if (outputLine.length() + value.length() + 1 > kOutputWrapWidth) {
+      flushOutputLine();
+    }
+
+    if (!outputLine.isEmpty()) {
+      outputLine += ' ';
+    }
+    outputLine += value;
+    ++wordCount;
+    return true;
+  };
+
+  auto flushPending = [&]() -> bool {
+    if (pendingToken.isEmpty()) {
+      return true;
+    }
+    const bool ok = writeToken(pendingToken);
+    pendingToken = "";
+    return ok;
+  };
+
+  auto finishToken = [&](String value) -> bool {
+    value.trim();
+    if (value.isEmpty()) {
+      return true;
+    }
+
+    if (isEllipsisToken(value)) {
+      if (!pendingToken.isEmpty()) {
+        pendingToken += "...";
+      }
+      return true;
+    }
+
+    if (isHyphenToken(value)) {
+      return flushPending() && writeToken("-");
+    }
+
+    if (!flushPending()) {
+      return false;
+    }
+    pendingToken = value;
+    return true;
+  };
+
+  auto flushToken = [&]() -> bool {
+    if (token.isEmpty()) {
+      return true;
+    }
+    const bool ok = finishToken(token);
+    token = "";
+    return ok;
+  };
+
+  for (size_t i = 0; i < normalizedLine.length(); ++i) {
     if ((i & 0x7F) == 0) {
       serviceBackground();
     }
 
-    const char c = i < normalizedLine.length() ? normalizedLine[i] : ' ';
-    if (!isWhitespace(c)) {
-      token += c;
+    const char c = normalizedLine[i];
+    if (isWhitespace(c)) {
+      if (!flushToken()) {
+        return false;
+      }
       continue;
     }
 
-    token.trim();
-    if (!token.isEmpty() && hasReadableText(token)) {
-      if (reachedWordLimit(wordCount, maxWords)) {
-        flushOutputLine();
+    if (c == '-') {
+      if (isInlineWordHyphen(normalizedLine, i)) {
+        token += c;
+        continue;
+      }
+      if (!flushToken() || !finishToken("-")) {
         return false;
       }
-
-      if (outputLine.length() + token.length() + 1 > kOutputWrapWidth) {
-        flushOutputLine();
+      while (i + 1 < normalizedLine.length() && normalizedLine[i + 1] == '-') {
+        ++i;
       }
-
-      if (!outputLine.isEmpty()) {
-        outputLine += ' ';
-      }
-      outputLine += token;
-      ++wordCount;
+      continue;
     }
 
-    token = "";
+    if (c == '.' && i + 2 < normalizedLine.length() && normalizedLine[i + 1] == '.' &&
+        normalizedLine[i + 2] == '.') {
+      token += "...";
+      i += 2;
+      while (i + 1 < normalizedLine.length() && normalizedLine[i + 1] == '.') {
+        ++i;
+      }
+      if (!flushToken()) {
+        return false;
+      }
+      continue;
+    }
+
+    token += c;
   }
 
+  if (!flushToken() || !flushPending()) {
+    flushOutputLine();
+    return false;
+  }
   flushOutputLine();
 
   return !reachedWordLimit(wordCount, maxWords);
@@ -1230,11 +1440,12 @@ bool writeXhtmlAsRsvp(const String &html, File &output, size_t &wordCount, size_
       continue;
     }
 
-    char decoded = c;
+    String decodedText;
+    decodedText += c;
     if (c == '&') {
       const int entityEnd = html.indexOf(';', i + 1);
       if (entityEnd > 0 && entityEnd - static_cast<int>(i) <= 12) {
-        decoded = decodedEntityChar(html.substring(i + 1, entityEnd));
+        decodedText = decodedEntityText(html.substring(i + 1, entityEnd));
         i = entityEnd;
       }
     }
@@ -1243,11 +1454,15 @@ bool writeXhtmlAsRsvp(const String &html, File &output, size_t &wordCount, size_
       continue;
     }
     if (inHeading) {
-      appendNormalizedChar(heading, decoded);
+      for (size_t decodedIndex = 0; decodedIndex < decodedText.length(); ++decodedIndex) {
+        appendNormalizedChar(heading, decodedText[decodedIndex]);
+      }
       continue;
     }
 
-    appendNormalizedChar(line, decoded);
+    for (size_t decodedIndex = 0; decodedIndex < decodedText.length(); ++decodedIndex) {
+      appendNormalizedChar(line, decodedText[decodedIndex]);
+    }
     if (line.length() > kBufferedTextFlushThreshold) {
       if (!flushWordAlignedPrefix(output, line, wordCount, maxWords)) {
         return false;
@@ -1412,7 +1627,13 @@ class XhtmlRsvpStreamWriter {
   bool processEntityChar(char c) {
     if (c == ';') {
       mode_ = Mode::Text;
-      return processDecodedText(decodedEntityChar(entity_));
+      const String decoded = decodedEntityText(entity_);
+      for (size_t decodedIndex = 0; decodedIndex < decoded.length(); ++decodedIndex) {
+        if (!processDecodedText(decoded[decodedIndex])) {
+          return false;
+        }
+      }
+      return true;
     }
 
     if (c == '<') {

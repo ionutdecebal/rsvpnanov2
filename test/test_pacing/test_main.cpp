@@ -14,6 +14,31 @@ static ReadingLoop makeReader(uint16_t wpm, std::vector<String> words) {
   return r;
 }
 
+class FakeWordSource : public BookWordSource {
+ public:
+  explicit FakeWordSource(std::vector<String> words) : words_(std::move(words)) {}
+
+  size_t wordCount() const override { return words_.size(); }
+
+  String wordAt(size_t index) const override {
+    if (index >= words_.size()) {
+      return "";
+    }
+    return words_[index];
+  }
+
+  void prefetchAround(size_t index) const override {
+    lastPrefetchIndex = index;
+    ++prefetchCalls;
+  }
+
+  mutable size_t lastPrefetchIndex = static_cast<size_t>(-1);
+  mutable size_t prefetchCalls = 0;
+
+ private:
+  std::vector<String> words_;
+};
+
 // Duration of the first word when the second word is the contextual next.
 static uint32_t duration(uint16_t wpm, const char *word, const char *next) {
   ReadingLoop r = makeReader(wpm, {String(word), String(next)});
@@ -35,8 +60,11 @@ void test_wpm_base_interval(void) {
 
 void test_wpm_clamped_low(void) {
   ReadingLoop r;
+  r.setWpm(5);
+  TEST_ASSERT_EQUAL(10u, r.wpm());
+
   r.setWpm(50);
-  TEST_ASSERT_EQUAL(100u, r.wpm());
+  TEST_ASSERT_EQUAL(50u, r.wpm());
 }
 
 void test_wpm_clamped_high(void) {
@@ -54,15 +82,38 @@ void test_adjust_wpm_steps_by_25(void) {
   TEST_ASSERT_EQUAL(300u, r.wpm());
 }
 
+void test_adjust_wpm_steps_by_10_below_100(void) {
+  ReadingLoop r;
+  r.setWpm(50);
+  r.adjustWpm(1);
+  TEST_ASSERT_EQUAL(60u, r.wpm());
+  r.adjustWpm(-1);
+  TEST_ASSERT_EQUAL(50u, r.wpm());
+}
+
+void test_adjust_wpm_crosses_100_cleanly(void) {
+  ReadingLoop r;
+  r.setWpm(90);
+  r.adjustWpm(1);
+  TEST_ASSERT_EQUAL(100u, r.wpm());
+
+  r.adjustWpm(-1);
+  TEST_ASSERT_EQUAL(90u, r.wpm());
+
+  r.setWpm(125);
+  r.adjustWpm(-1);
+  TEST_ASSERT_EQUAL(100u, r.wpm());
+}
+
 void test_adjust_wpm_clamped_at_bounds(void) {
   ReadingLoop r;
   r.setWpm(1000);
   r.adjustWpm(1);
   TEST_ASSERT_EQUAL(1000u, r.wpm());
 
-  r.setWpm(100);
+  r.setWpm(10);
   r.adjustWpm(-1);
-  TEST_ASSERT_EQUAL(100u, r.wpm());
+  TEST_ASSERT_EQUAL(10u, r.wpm());
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +162,11 @@ void test_dash_pause(void) {
   // "so-" has trailing '-' with no char after: lastMeaningfulChar='-' → dashPause 60%
   // 200 + 120 = 320
   TEST_ASSERT_EQUAL(320u, duration(300, "so-", "the"));
+}
+
+void test_standalone_dash_pause(void) {
+  // Parser-level hyphen splitting can produce "-" as its own displayed token.
+  TEST_ASSERT_EQUAL(320u, duration(300, "-", "the"));
 }
 
 void test_ellipsis_pause(void) {
@@ -225,6 +281,17 @@ void test_ascii_fallback_maps_hungarian_double_acute_to_base_letter(void) {
 
 void test_ascii_fallback_maps_spanish_enye_to_base_letter(void) {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('n'), LatinText::fallbackAsciiByte(0xF1));
+}
+
+void test_spanish_inverted_punctuation_uses_custom_slots(void) {
+  uint8_t slot = 0;
+  TEST_ASSERT_TRUE(LatinText::storageByteForCodepoint(0x00BF, slot));
+  TEST_ASSERT_EQUAL_UINT8(0x17, slot);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('?'), LatinText::fallbackAsciiByte(slot));
+
+  TEST_ASSERT_TRUE(LatinText::storageByteForCodepoint(0x00A1, slot));
+  TEST_ASSERT_EQUAL_UINT8(0x16, slot);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>('!'), LatinText::fallbackAsciiByte(slot));
 }
 
 void test_very_long_word_extra_tier(void) {
@@ -390,6 +457,24 @@ void test_word_at_returns_correct_word(void) {
   TEST_ASSERT_EQUAL_STRING("gamma", r.wordAt(2).c_str());
 }
 
+void test_word_source_streams_words_and_prefetches(void) {
+  FakeWordSource source({String("alpha"), String("beta,"), String("Gamma")});
+  ReadingLoop r;
+  r.setWpm(300);
+  r.setWordSource(&source, 0);
+
+  TEST_ASSERT_EQUAL(3u, r.wordCount());
+  TEST_ASSERT_EQUAL_STRING("alpha", r.currentWord().c_str());
+  TEST_ASSERT_EQUAL(0u, source.lastPrefetchIndex);
+
+  r.seekTo(1);
+  TEST_ASSERT_EQUAL_STRING("beta,", r.currentWord().c_str());
+  TEST_ASSERT_EQUAL(1u, source.lastPrefetchIndex);
+  TEST_ASSERT_GREATER_OR_EQUAL(2u, source.prefetchCalls);
+
+  TEST_ASSERT_EQUAL_UINT32(290u, r.currentWordDurationMs());
+}
+
 // ---------------------------------------------------------------------------
 // wordPacingBonusMsAt: WPM-independent per-word bonus used by the time-estimate cache
 // ---------------------------------------------------------------------------
@@ -461,6 +546,8 @@ int main(void) {
   RUN_TEST(test_wpm_clamped_low);
   RUN_TEST(test_wpm_clamped_high);
   RUN_TEST(test_adjust_wpm_steps_by_25);
+  RUN_TEST(test_adjust_wpm_steps_by_10_below_100);
+  RUN_TEST(test_adjust_wpm_crosses_100_cleanly);
   RUN_TEST(test_adjust_wpm_clamped_at_bounds);
 
   RUN_TEST(test_short_word_no_bonus);
@@ -472,6 +559,7 @@ int main(void) {
   RUN_TEST(test_sentence_pause_preserved_with_closing_parenthesis);
   RUN_TEST(test_clause_pause_semicolon);
   RUN_TEST(test_dash_pause);
+  RUN_TEST(test_standalone_dash_pause);
   RUN_TEST(test_ellipsis_pause);
 
   RUN_TEST(test_known_abbreviation_no_pause);
@@ -494,6 +582,7 @@ int main(void) {
   RUN_TEST(test_ascii_fallback_maps_accented_latin_to_base_letter);
   RUN_TEST(test_ascii_fallback_maps_hungarian_double_acute_to_base_letter);
   RUN_TEST(test_ascii_fallback_maps_spanish_enye_to_base_letter);
+  RUN_TEST(test_spanish_inverted_punctuation_uses_custom_slots);
   RUN_TEST(test_very_long_word_extra_tier);
   RUN_TEST(test_compound_word_bonus);
   RUN_TEST(test_all_caps_complexity);
@@ -514,6 +603,7 @@ int main(void) {
   RUN_TEST(test_rewind_sentence_ignores_abbreviation_periods);
 
   RUN_TEST(test_word_at_returns_correct_word);
+  RUN_TEST(test_word_source_streams_words_and_prefetches);
 
   RUN_TEST(test_word_pacing_bonus_at_sum_matches_expected);
   RUN_TEST(test_word_pacing_bonus_at_is_invariant_to_wpm);

@@ -30,6 +30,9 @@ constexpr const char *kPrefHandedness = "handed";
 constexpr const char *kPrefPhantomWords = "phantom_on";
 constexpr const char *kPrefFooterMetricMode = "prog_md";
 constexpr const char *kPrefBatteryLabelMode = "bat_md";
+constexpr const char *kPrefReaderBatteryVisible = "read_bat";
+constexpr const char *kPrefReaderChapterVisible = "read_ch";
+constexpr const char *kPrefReaderProgressVisible = "read_pct";
 constexpr const char *kPrefReaderFontSize = "font_size";
 constexpr const char *kPrefReaderTypeface = "typeface";
 constexpr const char *kPrefTypographyFocusHighlight = "type_hlt";
@@ -45,7 +48,7 @@ constexpr const char *kPrefTypographyGuideGap = "type_gap";
 constexpr const char *kPrefWifiSsid = "wifi_ssid";
 constexpr const char *kPrefWifiPass = "wifi_pass";
 constexpr uint16_t kDefaultWpm = 300;
-constexpr uint16_t kMinWpm = 100;
+constexpr uint16_t kMinWpm = 10;
 constexpr uint16_t kMaxWpm = 1000;
 constexpr uint8_t kDefaultBrightness = 3;
 constexpr uint8_t kMaxBrightness = 4;
@@ -53,7 +56,7 @@ constexpr uint8_t kMaxUiLanguage = 1;
 constexpr uint8_t kMaxReaderMode = 1;
 constexpr uint8_t kMaxHandedness = 1;
 constexpr uint8_t kMaxFooterMetric = 2;
-constexpr uint8_t kMaxBatteryLabel = 1;
+constexpr uint8_t kMaxBatteryLabel = 2;
 constexpr uint8_t kMaxReaderFontSize = 2;
 constexpr uint8_t kMaxReaderTypeface = 2;
 constexpr uint8_t kMaxPauseMode = 1;
@@ -142,7 +145,7 @@ ul{padding-left:20px}code{background:var(--soft);border-radius:4px;padding:1px 4
 <div class="card"><h2>Word Pacing</h2>
 <label>Reading mode</label><select id="readerMode"><option value="rsvp">RSVP</option><option value="scroll">Scroll</option></select>
 <label>Pause behaviour</label><select id="pauseMode"><option value="sentence_end">End of sentence</option><option value="instant">Instant</option></select>
-<label>Base speed <span id="wpmValue"></span></label><input id="wpm" type="range" min="100" max="1000" step="25">
+<label>Base speed <span id="wpmValue"></span></label><input id="wpm" type="range" min="10" max="1000" step="5">
 <label>Long words <span id="longWordMsValue"></span></label><input id="longWordMs" type="range" min="0" max="600" step="50">
 <label>Complexity <span id="complexWordMsValue"></span></label><input id="complexWordMs" type="range" min="0" max="600" step="50">
 <label>Punctuation <span id="punctuationMsValue"></span></label><input id="punctuationMs" type="range" min="0" max="600" step="50">
@@ -152,7 +155,10 @@ ul{padding-left:20px}code{background:var(--soft);border-radius:4px;padding:1px 4
 <label>Brightness <span id="brightnessValue"></span></label><input id="brightnessIndex" type="range" min="0" max="4">
 <label>Reader hand</label><select id="handedness"><option value="right">Right</option><option value="left">Left</option></select>
 <label>Footer label</label><select id="footerMetric"><option value="percentage">Percentage</option><option value="chapter_time">Chapter time</option><option value="book_time">Book time</option></select>
-<label>Battery label</label><select id="batteryLabel"><option value="percent">Percentage</option><option value="time_remaining">Time remaining</option></select>
+<label>Battery label</label><select id="batteryLabel"><option value="percent">Percentage</option><option value="time_remaining">Time remaining</option><option value="voltage">Voltage</option></select>
+<label><input id="readingBattery" type="checkbox" style="width:auto"> Show battery while reading</label>
+<label><input id="readingChapter" type="checkbox" style="width:auto"> Show chapter while reading</label>
+<label><input id="readingProgress" type="checkbox" style="width:auto"> Show book percent while reading</label>
 </div>
 <div class="card"><h2>Typography</h2>
 <label>Typeface</label><select id="typeface"><option value="standard">Standard</option><option value="open_dyslexic">OpenDyslexic</option><option value="atkinson">Atkinson</option></select>
@@ -214,16 +220,18 @@ function saveDraft(){localStorage.setItem('rsvpArticleDraft',JSON.stringify({tit
 function loadDraft(){try{const d=JSON.parse(localStorage.getItem('rsvpArticleDraft')||'{}');$('articleTitle').value=d.title||'';$('articleAuthor').value=d.author||'';$('articleBody').value=d.body||''}catch(e){}}
 function val(id){const e=$(id);return e.type==='checkbox'?e.checked:e.value}
 function setVal(id,v){const e=$(id);if(e.type==='checkbox')e.checked=!!v;else e.value=v}
+function snapWpm(v){v=Math.max(10,Math.min(1000,Math.round(+v||300)));return v<=100?Math.max(10,Math.min(100,Math.round(v/10)*10)):Math.min(1000,100+Math.round((v-100)/25)*25)}
 function updateLabels(){['wpm','longWordMs','complexWordMs','punctuationMs','brightnessIndex','fontSizeIndex','tracking','anchorPercent','guideWidth','guideGap'].forEach(id=>{const l=$(id+'Value')||$(id.replace('Index','')+'Value');if(l)l.textContent=$(id).value+(id==='wpm'?' WPM':id.includes('Ms')?' ms':'')})}
-async function loadSettings(){try{settings=await api('/api/settings');setVal('readerMode',settings.reading.readerMode);setVal('pauseMode',settings.reading.pauseMode);setVal('wpm',settings.reading.wpm);setVal('longWordMs',settings.reading.pacing.longWordMs);setVal('complexWordMs',settings.reading.pacing.complexWordMs);setVal('punctuationMs',settings.reading.pacing.punctuationMs);setVal('displayMode',settings.display.nightMode?'night':settings.display.darkMode?'dark':'light');setVal('brightnessIndex',settings.display.brightnessIndex);setVal('handedness',settings.display.handedness);setVal('footerMetric',settings.display.footerMetric);setVal('batteryLabel',settings.display.batteryLabel);setVal('typeface',settings.typography.typeface);setVal('fontSizeIndex',settings.display.fontSizeIndex);setVal('tracking',settings.typography.tracking);setVal('anchorPercent',settings.typography.anchorPercent);setVal('guideWidth',settings.typography.guideWidth);setVal('guideGap',settings.typography.guideGap);setVal('focusHighlight',settings.typography.focusHighlight);setVal('phantomWords',settings.display.phantomWords);updateLabels()}catch(e){status('Settings load failed: '+e.message)}}
-async function saveSettings(){const mode=val('displayMode');const payload={reading:{wpm:+val('wpm'),readerMode:val('readerMode'),pauseMode:val('pauseMode'),pacing:{longWordMs:+val('longWordMs'),complexWordMs:+val('complexWordMs'),punctuationMs:+val('punctuationMs')}},display:{darkMode:mode==='dark',nightMode:mode==='night',brightnessIndex:+val('brightnessIndex'),handedness:val('handedness'),footerMetric:val('footerMetric'),batteryLabel:val('batteryLabel'),phantomWords:val('phantomWords'),fontSizeIndex:+val('fontSizeIndex')},typography:{typeface:val('typeface'),focusHighlight:val('focusHighlight'),tracking:+val('tracking'),anchorPercent:+val('anchorPercent'),guideWidth:+val('guideWidth'),guideGap:+val('guideGap')}};try{settings=await api('/api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});status('Settings saved. Exit sync mode to apply all reader changes.')}catch(e){status('Settings save failed: '+e.message)}}
+async function loadSettings(){try{settings=await api('/api/settings');setVal('readerMode',settings.reading.readerMode);setVal('pauseMode',settings.reading.pauseMode);setVal('wpm',snapWpm(settings.reading.wpm));setVal('longWordMs',settings.reading.pacing.longWordMs);setVal('complexWordMs',settings.reading.pacing.complexWordMs);setVal('punctuationMs',settings.reading.pacing.punctuationMs);setVal('displayMode',settings.display.nightMode?'night':settings.display.darkMode?'dark':'light');setVal('brightnessIndex',settings.display.brightnessIndex);setVal('handedness',settings.display.handedness);setVal('footerMetric',settings.display.footerMetric);setVal('batteryLabel',settings.display.batteryLabel);setVal('readingBattery',settings.display.readingBattery);setVal('readingChapter',settings.display.readingChapter);setVal('readingProgress',settings.display.readingProgress);setVal('typeface',settings.typography.typeface);setVal('fontSizeIndex',settings.display.fontSizeIndex);setVal('tracking',settings.typography.tracking);setVal('anchorPercent',settings.typography.anchorPercent);setVal('guideWidth',settings.typography.guideWidth);setVal('guideGap',settings.typography.guideGap);setVal('focusHighlight',settings.typography.focusHighlight);setVal('phantomWords',settings.display.phantomWords);updateLabels()}catch(e){status('Settings load failed: '+e.message)}}
+async function saveSettings(){setVal('wpm',snapWpm(val('wpm')));const mode=val('displayMode');const payload={reading:{wpm:+val('wpm'),readerMode:val('readerMode'),pauseMode:val('pauseMode'),pacing:{longWordMs:+val('longWordMs'),complexWordMs:+val('complexWordMs'),punctuationMs:+val('punctuationMs')}},display:{darkMode:mode==='dark',nightMode:mode==='night',brightnessIndex:+val('brightnessIndex'),handedness:val('handedness'),footerMetric:val('footerMetric'),batteryLabel:val('batteryLabel'),readingBattery:val('readingBattery'),readingChapter:val('readingChapter'),readingProgress:val('readingProgress'),phantomWords:val('phantomWords'),fontSizeIndex:+val('fontSizeIndex')},typography:{typeface:val('typeface'),focusHighlight:val('focusHighlight'),tracking:+val('tracking'),anchorPercent:+val('anchorPercent'),guideWidth:+val('guideWidth'),guideGap:+val('guideGap')}};try{settings=await api('/api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});status('Settings saved. Exit sync mode to apply all reader changes.')}catch(e){status('Settings save failed: '+e.message)}}
 async function loadWifi(){try{const w=await api('/api/wifi');$('wifiSsid').value=w.ssid||'';$('wifiPassword').value='';$('wifiCurrent').textContent=w.configured?'Saved network: '+w.ssid:'No home Wi-Fi saved.'}catch(e){status('Wi-Fi load failed: '+e.message)}}
 async function saveWifi(){const ssid=$('wifiSsid').value.trim();if(!ssid){status('Enter a Wi-Fi SSID first.');return}try{const w=await api('/api/wifi',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,password:$('wifiPassword').value})});$('wifiPassword').value='';$('wifiCurrent').textContent='Saved network: '+w.ssid;status('Wi-Fi saved for RSS and OTA.')}catch(e){status('Wi-Fi save failed: '+e.message)}}
 async function forgetWifi(){if(!confirm('Forget saved Wi-Fi?'))return;try{await api('/api/wifi',{method:'DELETE'});$('wifiSsid').value='';$('wifiPassword').value='';$('wifiCurrent').textContent='No home Wi-Fi saved.';status('Wi-Fi credentials cleared.')}catch(e){status('Forget Wi-Fi failed: '+e.message)}}
 async function loadRss(){try{const r=await api('/api/rss-feeds');$('rssFeeds').value=(r.feeds||[]).join('\n');status('RSS feeds loaded.')}catch(e){status('RSS load failed: '+e.message)}}
 async function saveRss(){const feeds=$('rssFeeds').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);try{await api('/api/rss-feeds',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({feeds})});status('RSS feeds saved.')}catch(e){status('RSS save failed: '+e.message)}}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button,.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active');if(b.dataset.tab==='settings'){loadSettings();loadWifi()}if(b.dataset.tab==='rss')loadRss()});
-['wpm','longWordMs','complexWordMs','punctuationMs','brightnessIndex','fontSizeIndex','tracking','anchorPercent','guideWidth','guideGap'].forEach(id=>$(id).oninput=updateLabels);
+$('wpm').oninput=()=>{setVal('wpm',snapWpm(val('wpm')));updateLabels()};
+['longWordMs','complexWordMs','punctuationMs','brightnessIndex','fontSizeIndex','tracking','anchorPercent','guideWidth','guideGap'].forEach(id=>$(id).oninput=updateLabels);
 $('refreshBooksButton').onclick=refresh;$('refreshArticlesButton').onclick=refresh;$('uploadBookButton').onclick=()=>uploadPicked('bookFileInput','book');$('uploadArticleButton').onclick=()=>uploadPicked('articleFileInput','article');$('syncArticleButton').onclick=syncArticle;$('saveDraftButton').onclick=saveDraft;$('saveSettingsButton').onclick=saveSettings;$('saveWifiButton').onclick=saveWifi;$('forgetWifiButton').onclick=forgetWifi;$('saveRssButton').onclick=saveRss;$('reloadRssButton').onclick=loadRss;
 loadDraft();refresh();
 </script>
@@ -999,7 +1007,7 @@ String CompanionSyncManager::settingsJson() {
   static const char *const readerModeLabels[] = {"rsvp", "scroll"};
   static const char *const handednessLabels[] = {"right", "left"};
   static const char *const footerMetricLabels[] = {"percentage", "chapter_time", "book_time"};
-  static const char *const batteryLabelLabels[] = {"percent", "time_remaining"};
+  static const char *const batteryLabelLabels[] = {"percent", "time_remaining", "voltage"};
   static const char *const typefaceLabels[] = {"standard", "open_dyslexic", "atkinson"};
   static const char *const pauseModeLabels[] = {"sentence_end", "instant"};
 
@@ -1047,7 +1055,7 @@ String CompanionSyncManager::settingsJson() {
                kMinTypographyGuideGap, kMaxTypographyGuideGap));
 
   String body;
-  body.reserve(1100);
+  body.reserve(1250);
   body += "{\"ok\":true,\"version\":1";
   body += ",\"reading\":{";
   body += "\"wpm\":" + String(wpm);
@@ -1074,8 +1082,14 @@ String CompanionSyncManager::settingsJson() {
   body += enumLabel(footerMetric, footerMetricLabels, 3);
   body += "\"";
   body += ",\"batteryLabel\":\"";
-  body += enumLabel(batteryLabel, batteryLabelLabels, 2);
+  body += enumLabel(batteryLabel, batteryLabelLabels, 3);
   body += "\"";
+  body += ",\"readingBattery\":" +
+          String(preferences_.getBool(kPrefReaderBatteryVisible, true) ? "true" : "false");
+  body += ",\"readingChapter\":" +
+          String(preferences_.getBool(kPrefReaderChapterVisible, false) ? "true" : "false");
+  body += ",\"readingProgress\":" +
+          String(preferences_.getBool(kPrefReaderProgressVisible, false) ? "true" : "false");
   body += ",\"language\":" + String(language);
   body += ",\"phantomWords\":" +
           String(preferences_.getBool(kPrefPhantomWords, true) ? "true" : "false");
@@ -1117,7 +1131,7 @@ bool CompanionSyncManager::applySettingsJson(const String &body, String &error) 
   static const char *const readerModeLabels[] = {"rsvp", "scroll"};
   static const char *const handednessLabels[] = {"right", "left"};
   static const char *const footerMetricLabels[] = {"percentage", "chapter_time", "book_time"};
-  static const char *const batteryLabelLabels[] = {"percent", "time_remaining"};
+  static const char *const batteryLabelLabels[] = {"percent", "time_remaining", "voltage"};
   static const char *const typefaceLabels[] = {"standard", "open_dyslexic", "atkinson"};
   static const char *const pauseModeLabels[] = {"sentence_end", "instant"};
 
@@ -1127,7 +1141,7 @@ bool CompanionSyncManager::applySettingsJson(const String &body, String &error) 
 
   if (readJsonInt(body, "wpm", intValue)) {
     if (intValue < kMinWpm || intValue > kMaxWpm) {
-      error = "wpm must be between 100 and 1000";
+      error = "wpm must be between 10 and 1000";
       return false;
     }
     preferences_.putUShort(kPrefWpm, static_cast<uint16_t>(intValue));
@@ -1200,12 +1214,21 @@ bool CompanionSyncManager::applySettingsJson(const String &body, String &error) 
     preferences_.putUChar(kPrefFooterMetricMode, static_cast<uint8_t>(value));
   }
   if (readJsonString(body, "batteryLabel", stringValue)) {
-    const int value = enumValue(stringValue, batteryLabelLabels, 2);
+    const int value = enumValue(stringValue, batteryLabelLabels, 3);
     if (value < 0) {
-      error = "batteryLabel must be percent or time_remaining";
+      error = "batteryLabel must be percent, time_remaining, or voltage";
       return false;
     }
     preferences_.putUChar(kPrefBatteryLabelMode, static_cast<uint8_t>(value));
+  }
+  if (readJsonBool(body, "readingBattery", boolValue)) {
+    preferences_.putBool(kPrefReaderBatteryVisible, boolValue);
+  }
+  if (readJsonBool(body, "readingChapter", boolValue)) {
+    preferences_.putBool(kPrefReaderChapterVisible, boolValue);
+  }
+  if (readJsonBool(body, "readingProgress", boolValue)) {
+    preferences_.putBool(kPrefReaderProgressVisible, boolValue);
   }
   if (readJsonInt(body, "language", intValue)) {
     if (intValue < 0 || intValue > kMaxUiLanguage) {

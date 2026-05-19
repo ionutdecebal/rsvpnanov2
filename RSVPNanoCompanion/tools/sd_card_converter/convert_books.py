@@ -135,8 +135,7 @@ UNICODE_ASCII_REPLACEMENTS = str.maketrans(
 
 def clean_text(text: str) -> str:
     text = html.unescape(text).translate(UNICODE_ASCII_REPLACEMENTS)
-    text = unicodedata.normalize("NFKD", text)
-    text = text.encode("ascii", errors="ignore").decode("ascii")
+    text = unicodedata.normalize("NFC", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -284,7 +283,7 @@ class RsvpWriter:
         if self.chapter_count == 0:
             self.lines.insert(4, f"@chapter {directive_text(fallback_chapter)}")
 
-        output_path.write_text("\n".join(self.lines).strip() + "\n", encoding="ascii")
+        output_path.write_text("\n".join(self.lines).strip() + "\n", encoding="utf-8")
 
 
 class HtmlEventsExtractor(HTMLParser):
