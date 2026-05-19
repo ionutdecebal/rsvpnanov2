@@ -41,10 +41,25 @@ final class NanoConnectionManager: ObservableObject {
             self.hasAttemptedConnection = true
             let address = self.normalizedAddress(self.address)
             // Note: RSS feeds will be updated by specialized view models after connection
-            let snapshot = try await companionController.connect(baseUrl: address, localRssFeeds: [])
+            let snapshot = try await companionController.connectWithRetry(
+                baseUrl: address,
+                localRssFeeds: [],
+                attempts: 4,
+                retryDelayMillis: 750
+            )
             self.applyConnectionSnapshot(snapshot, address: address)
         }
         return isConnected
+    }
+
+    func recheckConnectionAfterForeground(showBusy: Bool = false) {
+        Task {
+            if isConnected {
+                await run("Checking reader connection", showBusy: showBusy, requiresConnection: true) {}
+            } else {
+                await connectOnce(showBusy: showBusy)
+            }
+        }
     }
     
     func run(
@@ -59,7 +74,11 @@ final class NanoConnectionManager: ObservableObject {
         status = busyStatus
         do {
             if requiresConnection {
-                try await companionController.verifyReachable(baseUrl: normalizedAddress(address))
+                try await companionController.verifyReachableWithRetry(
+                    baseUrl: normalizedAddress(address),
+                    attempts: 4,
+                    retryDelayMillis: 750
+                )
             }
             try await operation()
         } catch {

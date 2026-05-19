@@ -59,8 +59,8 @@ fun CompanionApp(
     }
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && !viewModel.uiState.value.isConnected) {
-                viewModel.connect()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.recheckConnectionAfterResume()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

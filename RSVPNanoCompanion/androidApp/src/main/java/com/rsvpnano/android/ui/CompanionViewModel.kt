@@ -118,7 +118,7 @@ class CompanionViewModel(
     private fun connect(showBusyStatus: Boolean) {
         viewModelScope.launch {
             if (showBusyStatus) {
-                setStatus("Connecting...")
+                setStatus("Connecting... Give the phone a few seconds after joining the Nano Wi-Fi.")
             }
             val state = current
             val address = SharedAppUtils.normalizedAddress(state.address)
@@ -133,6 +133,22 @@ class CompanionViewModel(
                         showAddressEntry = current.showAddressEntry || address == SharedAppUtils.DEFAULT_DEVICE_ADDRESS,
                     )
                 }
+        }
+    }
+
+    fun recheckConnectionAfterResume() {
+        viewModelScope.launch {
+            val state = current
+            if (!state.isConnected) {
+                connect(showBusyStatus = false)
+                return@launch
+            }
+
+            runCatching {
+                companionController.verifyReachableWithRetry(SharedAppUtils.normalizedAddress(state.address))
+            }.onFailure {
+                markDisconnected("Reader disconnected. Reconnect to RSVP Nano before continuing.")
+            }
         }
     }
 
@@ -499,7 +515,7 @@ class CompanionViewModel(
     private fun setStatus(status: String) = updateState { it.copy(status = status) }
 
     private suspend fun refreshConnection(address: String, localRssFeeds: List<String>) {
-        val snapshot = companionController.connect(address, localRssFeeds)
+        val snapshot = companionController.connectWithRetry(address, localRssFeeds)
         val device = snapshot.device
         val deviceName = device.info?.name ?: "RSVP Nano"
         updateState {

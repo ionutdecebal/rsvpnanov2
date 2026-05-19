@@ -7,6 +7,7 @@ import com.rsvpnano.models.NanoBook
 import com.rsvpnano.models.NanoSettings
 import com.rsvpnano.models.NanoWifiSettings
 import com.rsvpnano.models.PendingUpload
+import kotlinx.coroutines.delay
 
 /**
  * Shared workflow controller for app-level device operations.
@@ -42,6 +43,17 @@ class NanoCompanionController(
             syncedRssFeeds = syncedFeeds,
             drafts = draftService.loadDrafts(),
         )
+    }
+
+    suspend fun connectWithRetry(
+        baseUrl: String,
+        localRssFeeds: List<String>,
+        attempts: Int = DEFAULT_CONNECTION_ATTEMPTS,
+        retryDelayMillis: Long = DEFAULT_CONNECTION_RETRY_DELAY_MILLIS,
+    ): CompanionConnectSnapshot {
+        return retryDeviceOperation(attempts, retryDelayMillis) {
+            connect(baseUrl, localRssFeeds)
+        }
     }
 
     suspend fun refreshDevice(baseUrl: String, localRssFeeds: List<String>): CompanionDeviceRefreshSnapshot {
@@ -203,6 +215,16 @@ class NanoCompanionController(
         deviceSyncService.verifyReachable(baseUrl)
     }
 
+    suspend fun verifyReachableWithRetry(
+        baseUrl: String,
+        attempts: Int = DEFAULT_CONNECTION_ATTEMPTS,
+        retryDelayMillis: Long = DEFAULT_CONNECTION_RETRY_DELAY_MILLIS,
+    ) {
+        retryDeviceOperation(attempts, retryDelayMillis) {
+            deviceSyncService.verifyReachable(baseUrl)
+        }
+    }
+
     private suspend fun saveMergedRssFeeds(localFeeds: List<String>, deviceFeeds: List<String>): List<String> {
         return rssFeedService.saveRssFeeds(
             rssFeedService.mergeRssFeeds(
@@ -210,6 +232,30 @@ class NanoCompanionController(
                 deviceFeeds = deviceFeeds,
             )
         )
+    }
+
+    private suspend fun <T> retryDeviceOperation(
+        attempts: Int,
+        retryDelayMillis: Long,
+        operation: suspend () -> T,
+    ): T {
+        var lastError: Throwable? = null
+        repeat(attempts.coerceAtLeast(1)) { index ->
+            try {
+                return operation()
+            } catch (error: Throwable) {
+                lastError = error
+                if (index < attempts - 1 && retryDelayMillis > 0) {
+                    delay(retryDelayMillis)
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("Device operation failed.")
+    }
+
+    companion object {
+        const val DEFAULT_CONNECTION_ATTEMPTS = 4
+        const val DEFAULT_CONNECTION_RETRY_DELAY_MILLIS = 750L
     }
 }
 
