@@ -22,10 +22,17 @@ struct LibraryPage: View {
     private var libraryList: some View {
         List {
             if let info = connection.info {
-                Section("Reader") {
-                    LabeledContent("Name", value: info.name)
-                    LabeledContent("Wi-Fi", value: info.networkSsid ?? "Connected")
-                    LabeledContent("Library", value: viewModel.librarySummary)
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(info.name)
+                            .font(.title2.weight(.semibold))
+                        Text(viewModel.librarySummary)
+                            .foregroundStyle(.secondary)
+                        Text(info.networkSsid ?? "Connected to reader")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
 
@@ -75,7 +82,7 @@ struct LibraryPage: View {
                 Button {
                     viewModel.showingPicker = true
                 } label: {
-                    Label("Upload File", systemImage: "doc.badge.plus")
+                    Label("Upload", systemImage: "doc.badge.plus")
                 }
                 .disabled(!connection.isConnected || connection.isBusy)
 
@@ -89,7 +96,7 @@ struct LibraryPage: View {
                 Button {
                     viewModel.refreshBooks()
                 } label: {
-                    Label("Refresh Library", systemImage: "arrow.clockwise")
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(!connection.isConnected || connection.isBusy)
             }
@@ -113,12 +120,12 @@ private struct ConnectionInstructionsView: View {
 
                     Label("Join the Nano Wi-Fi", systemImage: "2.circle")
                         .font(.headline)
-                    Text("Join the network shown on the reader. It starts with RSVP-Nano.")
+                    Text("Join the network shown on the reader.")
                         .foregroundStyle(.secondary)
 
                     Label("Return to this app", systemImage: "3.circle")
                         .font(.headline)
-                    Text("The app checks http://192.168.4.1 automatically when it becomes active again.")
+                    Text("The app checks the reader when it becomes active again.")
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
@@ -137,16 +144,10 @@ private struct ConnectionInstructionsView: View {
                 .disabled(connection.isBusy)
             }
 
-            Section("Fallback") {
+            Section("Trouble connecting?") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("If iOS does not show Wi-Fi settings from the app, open Settings manually, join the RSVP-Nano network shown on the reader, then return here.")
+                    Text("If the default address is not found, enter the address shown on the reader.")
                         .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    openWifiSettings()
-                } label: {
-                    Label("Open Wi-Fi Settings", systemImage: "gear")
                 }
 
                 Button {
@@ -156,7 +157,7 @@ private struct ConnectionInstructionsView: View {
                 }
 
                 if connection.showAddressEntry {
-                    Text("RSVP Nano was not found at http://192.168.4.1. If the reader shows a different address, enter it here.")
+                    Text("Default: http://192.168.4.1")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 

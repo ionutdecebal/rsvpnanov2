@@ -33,6 +33,9 @@ struct SettingsPage: View {
 
     private var settingsSummarySection: some View {
         Section("Device Settings") {
+            Text(connection.isConnected ? "Load reader settings to edit them here." : "Connect to the reader to edit settings.")
+                .foregroundStyle(.secondary)
+
             Button {
                 viewModel.refreshSettings()
             } label: {
@@ -188,7 +191,7 @@ struct SettingsPage: View {
         } header: {
             Text("Wi-Fi")
         } footer: {
-            Text("Used for RSS and OTA. You can still configure Wi-Fi directly on the reader if you want the standalone path.")
+            Text("Used by the reader for RSS and OTA updates.")
         }
     }
 

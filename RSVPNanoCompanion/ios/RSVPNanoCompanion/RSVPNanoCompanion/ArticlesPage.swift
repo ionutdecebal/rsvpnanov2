@@ -8,25 +8,22 @@ struct ArticlesPage: View {
 
     var body: some View {
         List {
+            workflowSection
             savedArticlesSection
-            syncedArticlesSection
             rssFeedsSection
+        }
+    }
 
-            Section("Article Workflow") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Share from the browser", systemImage: "square.and.arrow.up")
-                    Text("Use Share -> RSVP Nano while your phone still has internet. The app saves fetched article text locally; then connect to the Nano Wi-Fi when you are ready to sync.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Edit before sync", systemImage: "pencil")
-                    Text("Saved article drafts keep their title, source URL, and body text locally until you sync or delete them.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+    private var workflowSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Save while online", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                Text("Share an article to RSVP Nano before joining the reader Wi-Fi. Sync it later from this screen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 4)
         }
     }
 
@@ -71,7 +68,7 @@ struct ArticlesPage: View {
                         }
 
                         if item.needsArticleFetch {
-                            Text("This is only a saved link. Share it again while online, or paste article text in Preview/Edit before syncing.")
+                            Text("Needs article text before sync.")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                         }
@@ -86,20 +83,6 @@ struct ArticlesPage: View {
                 }
                 .disabled(!connection.isConnected || connection.isBusy || !viewModel.pendingUploads.contains { !$0.needsArticleFetch })
             }
-        }
-    }
-
-    private var syncedArticlesSection: some View {
-        // We need library books here. 
-        // For now, we can pass them in or article synced is a separate concern.
-        // Actually, let's keep it simple: LibraryViewModel owns the synced list.
-        // But for parity with previous UI, we can inject the LibraryViewModel or just the list.
-        
-        Section {
-            Text("Go to Library to see articles already on the SD card.")
-                .foregroundStyle(.secondary)
-        } header: {
-            Text("Synced Articles")
         }
     }
 
@@ -174,6 +157,13 @@ struct ArticlesPage: View {
         guard let sourceUrl = item.sourceUrl, !sourceUrl.isEmpty else {
             return "\(detail) · \(size)"
         }
-        return "\(detail) · \(size) · \(sourceUrl)"
+        return "\(detail) · \(size) · \(sourceHost(for: sourceUrl))"
+    }
+
+    private func sourceHost(for sourceUrl: String) -> String {
+        guard let host = URL(string: sourceUrl)?.host, !host.isEmpty else {
+            return "source saved"
+        }
+        return host
     }
 }
